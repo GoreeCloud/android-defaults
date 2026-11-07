@@ -67,6 +67,22 @@ class ClockMathTest {
             ClockMath.nextAlarmAt(instant(2028, 2, 29, 8, 0), 6, 15, 0, zone))
     }
 
+    @Test fun exactRepeatTimeRollsToNextWeek() {
+        // November 9, 2026 is Monday. A same-minute Monday alarm recurs Nov 16.
+        assertEquals(instant(2026, 11, 16, 7, 0),
+            ClockMath.nextAlarmAt(instant(2026, 11, 9, 7, 0), 7, 0, 1 shl 0, zone))
+    }
+
+    @Test fun yearBoundaryOneShot() {
+        assertEquals(instant(2027, 1, 1, 6, 45),
+            ClockMath.nextAlarmAt(instant(2026, 12, 31, 9, 0), 6, 45, 0, zone))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun invalidMinutesRejected() {
+        ClockMath.nextAlarmAt(0L, 12, 60, 0, zone)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun invalidHoursRejected() {
         ClockMath.nextAlarmAt(0L, 24, 0, 0, zone)

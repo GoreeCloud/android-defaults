@@ -34,7 +34,9 @@ object AlarmEngine {
         if (!manager.areNotificationsEnabled()) return false
         // A disabled high-importance alert channel must not appear schedulable.
         val channel = manager.getNotificationChannel(CHANNEL_ID)
-        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+        // LOW/MIN channels or user-muted sounds cannot provide an audible alert.
+        return channel == null || (channel.importance >= NotificationManager.IMPORTANCE_DEFAULT &&
+            channel.sound != null)
     }
 
     fun exactAllowed(context: Context): Boolean {
@@ -98,6 +100,18 @@ object AlarmEngine {
         context.getSystemService(AlarmManager::class.java).cancel(timerIntent(context))
     }
 
+    /**
+     * Restore alarms after the user returns from Android permission/channel settings.
+     * Permission restoration itself has no reliable channel-change broadcast.
+     * PendingIntent identity makes repeated scheduling idempotent.
+     */
+    fun reconcileSchedules(context: Context) {
+        if (!ready(context)) return
+        ClockStore.alarms(context).filter { it.enabled }.forEach { scheduleAlarm(context, it) }
+        val deadline = ClockStore.timerDeadline(context)
+        if (deadline > System.currentTimeMillis()) scheduleTimer(context, deadline)
+    }
+
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
@@ -123,7 +137,11 @@ object AlarmEngine {
             .setAutoCancel(true)
             .setContentIntent(openApp(context))
             .build()
-        context.getSystemService(NotificationManager::class.java).notify(id, notification)
+        try {
+            context.getSystemService(NotificationManager::class.java).notify(id, notification)
+        } catch (_: SecurityException) {
+            // Notification permission or channel access can change between check and post.
+        }
     }
 
     internal fun isAlarmAction(action: String?) = action == ACTION_ALARM

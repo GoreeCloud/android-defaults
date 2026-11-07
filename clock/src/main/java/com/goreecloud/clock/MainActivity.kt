@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        AlarmEngine.reconcileSchedules(this)
         refreshTick++
     }
 }
@@ -460,13 +461,16 @@ private fun AlarmPage(
     onDelete: (ClockAlarm) -> Unit,
 ) {
     val context = LocalContext.current
-    val next = remember(alarms, now / 60000L) {
+    val currentZone = java.util.TimeZone.getDefault()
+    val next = remember(alarms, now / 60000L, currentZone.id) {
         alarms.filter { it.enabled }.map {
-            ClockMath.nextAlarmAt(now, it.hour, it.minute, it.repeatDays)
+            ClockMath.nextAlarmAt(now, it.hour, it.minute, it.repeatDays, currentZone)
         }.minOrNull()
     }
-    val dateFormat = remember(context) {
-        SimpleDateFormat("EEEE · MMM d, h:mm a", Locale.getDefault())
+    val dateFormat = remember(context, currentZone.id) {
+        SimpleDateFormat("EEEE · MMM d, h:mm a", Locale.getDefault()).apply {
+            timeZone = currentZone
+        }
     }
     if (!canAlert && alarms.any { it.enabled }) {
         Panel {
