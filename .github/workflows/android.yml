@@ -33,7 +33,7 @@ jobs:
           from pathlib import Path
 
           workflow = Path(".github/workflows/android.yml").read_text()
-          refs = re.findall(r"^\s*-\s*uses:\s*([^\s#]+)", workflow, re.MULTILINE)
+          refs = re.findall(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", workflow, re.MULTILINE)
           approved = {
               "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "actions/setup-java": "b843ebf9b913146b38da2eaa7aeddf76074ae1ad",
