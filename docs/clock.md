@@ -10,7 +10,7 @@
 
 ## Platform behavior
 
-The app is a Kotlin/Jetpack Compose Android module for API 26–35. Alarms and background timers require both notification permission (Android 13+) and exact-alarm access (Android 12+), which users explicitly grant in Android settings. If missing, the app refuses to mark a newly enabled alarm or timer as scheduled.
+The app is a Kotlin/Jetpack Compose Android module for API 26–35. Alarms and background timers require both notification permission (Android 13+) and exact-alarm access (Android 12+), which users explicitly grant in Android settings. If missing, the app refuses to mark a newly enabled alarm or timer as scheduled. It also checks Android's app-level notification switch and alert-channel importance: disabled channels must not count as working notification access, and enabled alarms display an access warning until the relevant settings are restored.
 
 Notifications use a high-importance alarm-sound channel. Android notification controls, Do Not Disturb, device power policies and OEM behavior can affect alert delivery and sound. This is an **initial local Clock implementation**, not an independently device-tested safety-critical alarm substitute. No fullscreen alarm ringing, custom ringtones, persistent lap history, or cloud synchronization is implemented.
 

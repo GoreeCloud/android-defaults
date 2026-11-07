@@ -3,6 +3,7 @@ package com.goreecloud.clock
 import android.Manifest
 import android.app.TimePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -138,6 +139,8 @@ private fun ClockApp(refreshToken: Int) {
     var tab by rememberSaveable { mutableStateOf(ClockTab.ALARMS) }
     var alarms by remember { mutableStateOf(ClockStore.alarms(context)) }
     var themeMode by remember { mutableStateOf(ClockStore.theme(context)) }
+    var notificationsReady by remember { mutableStateOf(AlarmEngine.notificationsAllowed(context)) }
+    var exactReady by remember { mutableStateOf(AlarmEngine.exactAllowed(context)) }
     var deadline by remember { mutableLongStateOf(ClockStore.timerDeadline(context)) }
     var pausedRemaining by remember { mutableLongStateOf(ClockStore.timerRemaining(context)) }
     var stopwatchAccumulated by remember { mutableLongStateOf(ClockStore.stopwatchAccumulated(context)) }
@@ -164,6 +167,8 @@ private fun ClockApp(refreshToken: Int) {
     }
     LaunchedEffect(refreshToken) {
         alarms = ClockStore.alarms(context)
+        notificationsReady = AlarmEngine.notificationsAllowed(context)
+        exactReady = AlarmEngine.exactAllowed(context)
         deadline = ClockStore.timerDeadline(context)
         pausedRemaining = ClockStore.timerRemaining(context)
         themeMode = ClockStore.theme(context)
@@ -250,6 +255,8 @@ private fun ClockApp(refreshToken: Int) {
                 when (tab) {
                     ClockTab.ALARMS -> AlarmPage(
                         alarms = alarms, now = now,
+                        canAlert = notificationsReady && exactReady,
+                        onOpenSettings = { tab = ClockTab.SETTINGS },
                         onAdd = {
                             val time = Calendar.getInstance()
                             TimePickerDialog(
@@ -338,8 +345,12 @@ private fun ClockApp(refreshToken: Int) {
                             themeMode = it
                             ClockStore.setTheme(context, it)
                         },
-                        notificationsAllowed = AlarmEngine.notificationsAllowed(context),
-                        exactAllowed = AlarmEngine.exactAllowed(context),
+                        notificationsAllowed = notificationsReady,
+                        exactAllowed = exactReady,
+                        onPermissionsChanged = {
+                            notificationsReady = AlarmEngine.notificationsAllowed(context)
+                            exactReady = AlarmEngine.exactAllowed(context)
+                        },
                     )
                 }
             }
@@ -421,6 +432,8 @@ private fun SectionHeading(title: String, subtitle: String? = null) {
 private fun AlarmPage(
     alarms: List<ClockAlarm>,
     now: Long,
+    canAlert: Boolean,
+    onOpenSettings: () -> Unit,
     onAdd: () -> Unit,
     onEditTime: (ClockAlarm) -> Unit,
     onToggle: (ClockAlarm, Boolean) -> Unit,
@@ -435,6 +448,17 @@ private fun AlarmPage(
     }
     val dateFormat = remember(context) {
         SimpleDateFormat("EEEE · MMM d, h:mm a", Locale.getDefault())
+    }
+    if (!canAlert && alarms.any { it.enabled }) {
+        Panel {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Alarm alerts need attention", fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary)
+                Text("Some alarms are enabled but cannot reliably notify. Check Android notification and exact-alarm access.",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = onOpenSettings) { Text("Review settings") }
+            }
+        }
     }
     Panel {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -689,11 +713,12 @@ private fun StopwatchPage(
 private fun SettingsPage(
     theme: String, onTheme: (String) -> Unit,
     notificationsAllowed: Boolean, exactAllowed: Boolean,
+    onPermissionsChanged: () -> Unit,
 ) {
     val context = LocalContext.current
     val requestNotification = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* On resume the parent refreshes permission state. */ }
+    ) { onPermissionsChanged() }
     SectionHeading("Appearance", "Pick the feel that fits your day.")
     Panel {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -716,7 +741,10 @@ private fun SettingsPage(
                 "Notifications", notificationsAllowed,
                 if (notificationsAllowed) "Allowed" else "Permission needed"
             ) {
-                if (Build.VERSION.SDK_INT >= 33 && !notificationsAllowed) {
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
                     requestNotification.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
                     context.startActivity(

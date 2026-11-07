@@ -25,10 +25,17 @@ object AlarmEngine {
     private const val EXTRA_ID = "alarm_id"
     private const val CHANNEL_ID = "clock_alerts"
 
-    fun notificationsAllowed(context: Context): Boolean =
-        Build.VERSION.SDK_INT < 33 ||
+    fun notificationsAllowed(context: Context): Boolean {
+        val runtimeAllowed = Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
+        if (!runtimeAllowed) return false
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled()) return false
+        // A disabled high-importance alert channel must not appear schedulable.
+        val channel = manager.getNotificationChannel(CHANNEL_ID)
+        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
 
     fun exactAllowed(context: Context): Boolean {
         val manager = context.getSystemService(AlarmManager::class.java)
