@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -245,8 +247,12 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     MaterialTheme(colorScheme = if (dark) gcDark else gcLight) {
         val scheme = MaterialTheme.colorScheme
         Box(Modifier.fillMaxSize().background(scheme.background)) {
+            // Keep the content readable on tablets without shrinking phones or
+            // creating fixed-width layouts that overflow smaller screens.
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                Modifier.align(Alignment.TopCenter)
+                    .fillMaxHeight().widthIn(max = 840.dp).fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .statusBarsPadding()
                     .padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 124.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp)
@@ -397,6 +403,7 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                 selected = tab,
                 onSelect = { tab = it; notice = null },
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                    .widthIn(max = 560.dp).fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 12.dp)
             )
         }

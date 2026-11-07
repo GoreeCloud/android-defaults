@@ -2,7 +2,7 @@
 
 ## User experience
 
-- Floating bottom navigation: **Alarms**, **Timer**, **Stopwatch**, **Settings**, with selected-state indicators, accessible tab group semantics, and labels.
+- Floating bottom navigation: **Alarms**, **Timer**, **Stopwatch**, **Settings**, with selected-state indicators, accessible tab group semantics, and labels. Tablet-width layouts cap the centered content column at 840 dp and the floating bottom dock at 560 dp; phones continue to fill their available width. These are responsive source constraints, not proof of rendered phone/tablet acceptance.
 - Alarms: honor the Android 12/24-hour preference and localized AM/PM markers consistently in the next-alarm summary, alarm rows and spoken switch labels; distinguish alarm-specific edit/delete accessibility actions. Add a local alarm, edit its time, enable/disable it, select repeat weekdays and delete it. Stable full 64-bit PendingIntent URI identities prevent request-code hash collisions; on rescheduling/upgrades, old hash-only requests are canceled. Alarm creation also guards against same-millisecond ID reuse, while notifications use ID-specific tags. Scheduling uses Android AlarmManager.setAlarmClock and reschedules following reboot, time/time-zone adjustment and app replacement.
 - Timer: set a countdown with validated 00–59 minute/second fields (never silently clamp invalid values), start, pause, resume and reset. An AlarmManager alarm notifies the user on completion even when the interface is not foregrounded.
 - Stopwatch: start, pause, reset and capture laps, with elapsed time maintained against Android elapsedRealtime. Fine-grained foreground updates run only while the app is visible; background rendering is suspended without stopping elapsed time.
