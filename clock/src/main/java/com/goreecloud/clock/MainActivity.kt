@@ -15,7 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,8 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -152,6 +151,13 @@ private fun ClockApp(refreshToken: Int) {
             now = System.currentTimeMillis()
             elapsedNow = SystemClock.elapsedRealtime()
             delay(100L)
+        }
+    }
+    // Keep the foreground countdown in sync with its persisted broadcast completion.
+    LaunchedEffect(now / 1000L, deadline) {
+        if (deadline > 0L && now >= deadline && ClockStore.timerDeadline(context) == 0L) {
+            deadline = 0L
+            pausedRemaining = 0L
         }
     }
     LaunchedEffect(refreshToken) {
@@ -240,6 +246,14 @@ private fun ClockApp(refreshToken: Int) {
                                 },
                                 time.get(Calendar.HOUR_OF_DAY), time.get(Calendar.MINUTE),
                                 DateFormat.is24HourFormat(context),
+                            ).show()
+                        },
+                        onEditTime = { alarm ->
+                            TimePickerDialog(
+                                context, { _, hour, minute ->
+                                    updateAlarm(alarm.copy(hour = hour, minute = minute))
+                                },
+                                alarm.hour, alarm.minute, DateFormat.is24HourFormat(context),
                             ).show()
                         },
                         onToggle = { alarm, enabled -> updateAlarm(alarm.copy(enabled = enabled)) },
@@ -346,8 +360,7 @@ private fun FloatingDock(selected: ClockTab, onSelect: (ClockTab) -> Unit, modif
                     modifier = Modifier.weight(1f).heightIn(min = 61.dp)
                         .clip(RoundedCornerShape(28.dp))
                         .background(if (active) scheme.primaryContainer else Color.Transparent)
-                        .clickable { onSelect(item) }
-                        .semantics { this.selected = active }
+                        .selectable(selected = active, role = Role.Tab) { onSelect(item) }
                         .padding(vertical = 8.dp, horizontal = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -355,7 +368,7 @@ private fun FloatingDock(selected: ClockTab, onSelect: (ClockTab) -> Unit, modif
                     Icon(item.icon, contentDescription = null, modifier = Modifier.size(23.dp),
                         tint = if (active) scheme.onPrimaryContainer else scheme.onSurfaceVariant)
                     Spacer(Modifier.height(4.dp))
-                    Text(item.label, fontSize = 10.sp, maxLines = 1,
+                    Text(item.label, fontSize = 12.sp, maxLines = 1,
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                         color = if (active) scheme.onPrimaryContainer else scheme.onSurfaceVariant)
                 }
@@ -392,6 +405,7 @@ private fun AlarmPage(
     alarms: List<ClockAlarm>,
     now: Long,
     onAdd: () -> Unit,
+    onEditTime: (ClockAlarm) -> Unit,
     onToggle: (ClockAlarm, Boolean) -> Unit,
     onEditDays: (ClockAlarm) -> Unit,
     onDelete: (ClockAlarm) -> Unit,
@@ -455,6 +469,9 @@ private fun AlarmPage(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { onEditTime(alarm) }) {
+                            Icon(Icons.Outlined.Alarm, contentDescription = "Change alarm time")
+                        }
                         IconButton(onClick = { onEditDays(alarm) }) {
                             Icon(Icons.Outlined.Edit, contentDescription = "Edit repeat days")
                         }

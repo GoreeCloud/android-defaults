@@ -29,6 +29,27 @@ class ClockMathTest {
             ClockMath.nextAlarmAt(instant(2026, 11, 6, 8, 0), 7, 0, 1 shl 0, zone))
     }
 
+    @Test fun sundayRepeatCrossesWeekBoundary() {
+        val sunday = 1 shl 6
+        assertEquals(instant(2026, 11, 8, 7, 45),
+            ClockMath.nextAlarmAt(instant(2026, 11, 6, 10, 0), 7, 45, sunday, zone))
+    }
+
+    @Test fun exactCurrentMinuteMeansTomorrowForOneShot() {
+        assertEquals(instant(2026, 11, 7, 7, 30),
+            ClockMath.nextAlarmAt(instant(2026, 11, 6, 7, 30), 7, 30, 0, zone))
+    }
+
+    @Test fun everyDayRollsForwardFromLateNight() {
+        assertEquals(instant(2026, 11, 7, 0, 15),
+            ClockMath.nextAlarmAt(instant(2026, 11, 6, 23, 59), 0, 15, 127, zone))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun invalidWeekdayMaskRejected() {
+        ClockMath.nextAlarmAt(0L, 8, 0, 128, zone)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun invalidHoursRejected() {
         ClockMath.nextAlarmAt(0L, 24, 0, 0, zone)

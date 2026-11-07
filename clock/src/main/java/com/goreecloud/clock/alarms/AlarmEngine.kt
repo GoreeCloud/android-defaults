@@ -131,7 +131,10 @@ class AlarmReceiver : BroadcastReceiver() {
                 val id = AlarmEngine.alarmId(intent)
                 val alarm = ClockStore.alarms(context).firstOrNull { it.id == id && it.enabled } ?: return
                 if (alarm.repeatDays == 0) ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
-                else AlarmEngine.scheduleAlarm(context, alarm)
+                else if (!AlarmEngine.scheduleAlarm(context, alarm)) {
+                    // Avoid displaying an enabled repeating alarm with no next occurrence.
+                    ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
+                }
                 AlarmEngine.notifyAlert(context, "Alarm", "It's time.", id.hashCode())
             }
             AlarmEngine.isTimerAction(intent.action) -> {
@@ -152,6 +155,12 @@ class RescheduleReceiver : BroadcastReceiver() {
             AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
         )
         if (intent.action !in approvedActions) return
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            // elapsedRealtime restarts after reboot; never restore a stale running session.
+            if (ClockStore.stopwatchStart(context) != 0L) {
+                ClockStore.setStopwatch(context, ClockStore.stopwatchAccumulated(context), 0L)
+            }
+        }
         ClockStore.alarms(context).filter { it.enabled }.forEach {
             AlarmEngine.scheduleAlarm(context, it)
         }
