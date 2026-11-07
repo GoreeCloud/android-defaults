@@ -22,4 +22,8 @@ The Compose light/dark colors are mapped from the versioned GoreeCloud UI token 
 
 ## Engineering validation
 
-CI is configured to run :clock:testDebugUnitTest, :clock:assembleDebug and :clock:lintDebug. **Actual results must be recorded after the workflow runs**; the presence of this workflow is not proof of passing validation. Device behavior, exact-alarm permissions, reboot broadcasts, notifications, accessibility and battery policy interactions still require physical testing.
+CI runs :clock:testDebugUnitTest, :clock:assembleDebug and :clock:lintDebug, and validates source backup-exclusion policies plus the packaged APK's app identity, sensitive-permission restrictions, non-exported receiver declarations, and backup-rule resources.
+
+**Last verified code run:** [GitHub Actions #42337172382](https://github.com/GoreeCloud/android-defaults/actions/runs/42337172382) passed on commit `647a117` (16 JVM unit tests, debug APK, Lint, merged-receiver checks, and extraction-rule presence). The source XML exclusions for cloud, device transfer, and legacy backups were also structurally inspected. This CI evidence applies to that commit; later commits require separate verification.
+
+**Partial physical verification:** A previous validated debug build (`46be8f3`, not the latest privacy commit) installed successfully on an authorized API 36 Android handset without taking over the foreground activity. Installed APK byte identity was verified. No Clock launch, notifications, exact-alarm permission grant, audible alert, reboot test, visual/TalkBack acceptance, or OEM backup/transfer validation has occurred. The newest APK has not been delivered as a standalone file in `GoreeCloud/Artifacts`; the draft PR is unmerged and not released.
