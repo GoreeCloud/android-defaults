@@ -539,10 +539,10 @@ private fun AlarmPage(
             }
         }
     } else alarms.forEach { alarm ->
+        val time = ClockTimeFormat.alarmTime(alarm.hour, alarm.minute, use24Hour, currentLocale)
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    val time = ClockTimeFormat.alarmTime(alarm.hour, alarm.minute, use24Hour, currentLocale)
                     Text(time, style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.SemiBold)
                     Text(if (alarm.repeatDays == 0) "Once" else weekdaysLabel(alarm.repeatDays),
