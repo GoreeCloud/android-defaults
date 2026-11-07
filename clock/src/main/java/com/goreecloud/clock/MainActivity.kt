@@ -91,6 +91,7 @@ import androidx.core.view.WindowCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.goreecloud.clock.alarms.AlarmEngine
 import com.goreecloud.clock.alarms.ClockMath
+import com.goreecloud.clock.alarms.ClockTimeFormat
 import com.goreecloud.clock.data.ClockAlarm
 import com.goreecloud.clock.data.ClockStore
 import kotlinx.coroutines.delay
@@ -481,15 +482,15 @@ private fun AlarmPage(
 ) {
     val context = LocalContext.current
     val currentZone = java.util.TimeZone.getDefault()
+    val use24Hour = DateFormat.is24HourFormat(context)
+    val currentLocale = Locale.getDefault()
     val next = remember(alarms, now / 60000L, currentZone.id) {
         alarms.filter { it.enabled }.map {
             ClockMath.nextAlarmAt(now, it.hour, it.minute, it.repeatDays, currentZone)
         }.minOrNull()
     }
-    val dateFormat = remember(context, currentZone.id) {
-        SimpleDateFormat("EEEE · MMM d, h:mm a", Locale.getDefault()).apply {
-            timeZone = currentZone
-        }
+    val nextTime = remember(next, currentZone.id, use24Hour, currentLocale) {
+        next?.let { ClockTimeFormat.nextAlarm(it, currentZone, use24Hour, currentLocale) }
     }
     if (!canAlert && alarms.any { it.enabled }) {
         Panel {
@@ -507,7 +508,7 @@ private fun AlarmPage(
             Text("NEXT ALARM", fontSize = 11.sp, letterSpacing = 2.sp,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                if (next != null) dateFormat.format(Date(next)) else "Nothing scheduled",
+                nextTime ?: "Nothing scheduled",
                 style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -541,11 +542,7 @@ private fun AlarmPage(
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    val format = if (DateFormat.is24HourFormat(context)) "%02d:%02d" else "%d:%02d %s"
-                    val time = if (DateFormat.is24HourFormat(context))
-                        String.format(Locale.getDefault(), format, alarm.hour, alarm.minute)
-                    else String.format(Locale.getDefault(), format, (alarm.hour + 11) % 12 + 1,
-                        alarm.minute, if (alarm.hour < 12) "AM" else "PM")
+                    val time = ClockTimeFormat.alarmTime(alarm.hour, alarm.minute, use24Hour, currentLocale)
                     Text(time, style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.SemiBold)
                     Text(if (alarm.repeatDays == 0) "Once" else weekdaysLabel(alarm.repeatDays),
@@ -553,13 +550,13 @@ private fun AlarmPage(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { onEditTime(alarm) }) {
-                            Icon(Icons.Outlined.Alarm, contentDescription = "Change alarm time")
+                            Icon(Icons.Outlined.Alarm, contentDescription = "Change $time alarm time")
                         }
                         IconButton(onClick = { onEditDays(alarm) }) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit repeat days")
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit repeat days for $time alarm")
                         }
                         IconButton(onClick = { onDelete(alarm) }) {
-                            Icon(Icons.Outlined.DeleteOutline, contentDescription = "Delete alarm")
+                            Icon(Icons.Outlined.DeleteOutline, contentDescription = "Delete $time alarm")
                         }
                     }
                 }
@@ -567,12 +564,14 @@ private fun AlarmPage(
                     checked = alarm.enabled,
                     onCheckedChange = { onToggle(alarm, it) },
                     modifier = Modifier.semantics {
-                        contentDescription = String.format(
-                            Locale.getDefault(), "Alarm at %02d:%02d, %s",
-                            alarm.hour, alarm.minute,
-                            if (alarm.repeatDays == 0) "one time"
-                            else weekdaysLabel(alarm.repeatDays),
-                        )
+                        contentDescription = "Alarm at $time, " +
+                            when (alarm.repeatDays) {
+                                0 -> "one time"
+                                127 -> "every day"
+                                else -> weekdayNames.filterIndexed { index, _ ->
+                                    alarm.repeatDays and (1 shl index) != 0
+                                }.joinToString(", ")
+                            }
                     },
                 )
             }
