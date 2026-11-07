@@ -56,7 +56,16 @@ jobs:
               exit 1
             fi
           done
-          echo "Clock APK identity, platform support, private receivers, and offline privacy boundary verified."
+          # Explicit extraction rules are required: allowBackup=false alone does
+          # not disable device-to-device transfers on all Android 12+ devices.
+          grep -Fq "android:allowBackup" <<< "$manifest"
+          grep -Fq "android:fullBackupContent" <<< "$manifest"
+          grep -Fq "android:dataExtractionRules" <<< "$manifest"
+          extraction="$("$aapt" dump xmltree "$apk" res/xml/data_extraction_rules.xml)"
+          grep -Fq "E: cloud-backup" <<< "$extraction"
+          grep -Fq "E: device-transfer" <<< "$extraction"
+          "$aapt" dump xmltree "$apk" res/xml/backup_rules.xml > /dev/null
+          echo "Clock APK identity, platform support, private receivers, offline permissions, and extraction rules verified."
       - uses: actions/upload-artifact@v4
         if: success()
         with:
