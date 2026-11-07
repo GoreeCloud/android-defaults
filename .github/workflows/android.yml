@@ -22,6 +22,26 @@ jobs:
           gradle-version: '9.5.0'
       - name: Unit tests, debug build, Android lint
         run: gradle :clock:testDebugUnitTest :clock:assembleDebug :clock:lintDebug --no-daemon --stacktrace
+      - name: Verify APK package, API level and privacy permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="clock/build/outputs/apk/debug/clock-debug.apk"
+          test -f "$apk"
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          aapt="$(find "$sdk/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$aapt" && test -x "$aapt"
+          badging="$("$aapt" dump badging "$apk")"
+          permissions="$("$aapt" dump permissions "$apk")"
+          grep -Fq "package: name='com.goreecloud.clock'" <<< "$badging"
+          grep -Fq "sdkVersion:'26'" <<< "$badging"
+          grep -Fq "targetSdkVersion:'35'" <<< "$badging"
+          if grep -Eq "uses-permission: name='android.permission.(INTERNET|READ_CONTACTS|QUERY_ALL_PACKAGES)'" <<< "$permissions"; then
+            echo "Unexpected sensitive Android permission in merged APK" >&2
+            exit 1
+          fi
+          echo "Clock APK identity, platform support, and offline privacy boundary verified."
       - uses: actions/upload-artifact@v4
         if: success()
         with:
