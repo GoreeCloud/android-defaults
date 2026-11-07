@@ -22,6 +22,8 @@ The Compose light/dark colors are mapped from the versioned GoreeCloud UI token 
 
 ## Engineering validation
 
+An additional, isolated GitHub-hosted Android API 35 emulator smoke job now tests real Android package/receiver privacy flags, 64-bit alarm PendingIntent separation, and the native four-tab Compose navigation. This is an **emulator-only development acceptance gate** and does not demonstrate physical-device audibility, OEM battery behavior, real TalkBack focus, or Android 16 transfer behavior. The external emulator-runner action is source-reviewed and pinned to an immutable upstream commit; it installs SDK/emulator components only on the disposable CI runner. The job must itself finish successfully before claiming any emulator runtime result.
+
 The GitHub Actions workflow pins its checkout, Java setup, Gradle setup and artifact-upload actions to verified upstream **full commit IDs** rather than mutable major-version tags. It runs a source-level pinning regression check, disables persistent checkout credentials, and restricts job permissions to read-only repository contents. The supported actions are run on GitHub-hosted runners, and the workflow must pass before this security maintenance is considered validated. Upgrade and review action pins deliberately; a pinned commit prevents moving-tag drift but does not guarantee an upstream action is safe.
 
 CI runs :clock:testDebugUnitTest, :clock:assembleDebug and :clock:lintDebug, and validates source backup-exclusion policies plus the packaged APK's app identity, sensitive-permission restrictions, non-exported receiver declarations, and backup-rule resources.
