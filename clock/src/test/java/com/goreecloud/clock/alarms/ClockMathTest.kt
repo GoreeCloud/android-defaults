@@ -1,6 +1,7 @@
 package com.goreecloud.clock.alarms
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.util.Calendar
 import java.util.TimeZone
@@ -12,6 +13,24 @@ class ClockMathTest {
             clear()
             set(year, month - 1, day, hour, minute)
         }.timeInMillis
+
+    @Test fun timerDurationUsesExactEnteredValues() {
+        assertEquals(3_723_000L, ClockMath.timerDurationMillis("01", "02", "03"))
+        assertEquals(359_999_000L, ClockMath.timerDurationMillis("99", "59", "59"))
+        assertEquals(0L, ClockMath.timerDurationMillis("00", "00", "00"))
+    }
+
+    @Test fun timerDurationRejectsOutOfRangeFields() {
+        assertNull(ClockMath.timerDurationMillis("01", "60", "00"))
+        assertNull(ClockMath.timerDurationMillis("01", "00", "60"))
+        assertNull(ClockMath.timerDurationMillis("100", "00", "00"))
+    }
+
+    @Test fun timerDurationRejectsMalformedFields() {
+        assertNull(ClockMath.timerDurationMillis("", "01", "00"))
+        assertNull(ClockMath.timerDurationMillis("00", "3x", "00"))
+        assertNull(ClockMath.timerDurationMillis("-1", "00", "00"))
+    }
 
     @Test fun sameDayFuture() {
         assertEquals(instant(2026, 11, 6, 7, 30),

@@ -598,6 +598,8 @@ private fun TimerPage(
     var hours by rememberSaveable { mutableStateOf("00") }
     var minutes by rememberSaveable { mutableStateOf("05") }
     var seconds by rememberSaveable { mutableStateOf("00") }
+    val enteredDuration = ClockMath.timerDurationMillis(hours, minutes, seconds)
+    val timerInputInvalid = enteredDuration == null
     val remaining = if (deadline > 0L) (deadline - now).coerceAtLeast(0L) else pausedRemaining
     val running = deadline > now
     val hasSession = deadline > 0L || pausedRemaining > 0L
@@ -632,11 +634,19 @@ private fun TimerPage(
                         if (text.length <= 2 && text.all { it.isDigit() }) change(text)
                     },
                     label = { Text(label) }, singleLine = true,
+                    isError = value.isNotEmpty() && value.toIntOrNull()?.let {
+                        it > (if (label == "Hours") 99 else 59)
+                    } == true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
                     textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center),
                 )
             }
+        }
+        if (timerInputInvalid) {
+            Text("Enter valid hours (00–99), minutes (00–59), and seconds (00–59).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error)
         }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -648,15 +658,8 @@ private fun TimerPage(
             }
         } else {
             Button(
-                onClick = {
-                    val duration = if (pausedRemaining > 0L) pausedRemaining else {
-                        val h = hours.toLongOrNull()?.coerceIn(0L, 99L) ?: 0L
-                        val m = minutes.toLongOrNull()?.coerceIn(0L, 59L) ?: 0L
-                        val s = seconds.toLongOrNull()?.coerceIn(0L, 59L) ?: 0L
-                        (h * 3600L + m * 60L + s) * 1000L
-                    }
-                    onStart(duration)
-                },
+                onClick = { onStart(if (pausedRemaining > 0L) pausedRemaining else enteredDuration ?: 0L) },
+                enabled = pausedRemaining > 0L || (enteredDuration != null && enteredDuration > 0L),
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
             ) {
                 Icon(Icons.Filled.PlayArrow, null)

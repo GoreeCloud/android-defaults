@@ -5,6 +5,22 @@ import java.util.TimeZone
 
 /** Monday is bit zero; Sunday is bit six. A zero bitmask denotes a one-shot alarm. */
 object ClockMath {
+    /**
+     * Returns null for invalid or incomplete two-digit timer input.
+     * Never silently clamp a user-requested duration to a different value.
+     */
+    fun timerDurationMillis(hours: String, minutes: String, seconds: String): Long? {
+        fun component(value: String, max: Int): Long? {
+            if (value.isEmpty() || value.length > 2 || !value.all { it in '0'..'9' }) return null
+            val parsed = value.toLongOrNull() ?: return null
+            return parsed.takeIf { it <= max }
+        }
+        val h = component(hours, 99) ?: return null
+        val m = component(minutes, 59) ?: return null
+        val s = component(seconds, 59) ?: return null
+        return (h * 3600L + m * 60L + s) * 1000L
+    }
+
     fun nextAlarmAt(now: Long, hour: Int, minute: Int, repeatDays: Int,
                     zone: TimeZone = TimeZone.getDefault()): Long {
         require(hour in 0..23 && minute in 0..59)
