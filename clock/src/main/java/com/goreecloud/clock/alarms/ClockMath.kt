@@ -5,6 +5,19 @@ import java.util.TimeZone
 
 /** Monday is bit zero; Sunday is bit six. A zero bitmask denotes a one-shot alarm. */
 object ClockMath {
+    /** Full 64-bit identity; requestCode (Int) and Intent extras alone can collide. */
+    fun alarmRequestData(id: Long): String = "goreecloud-clock://alarm/$id"
+
+    /** Avoid overwriting an existing alarm if two creations share one clock millisecond. */
+    fun uniqueAlarmId(now: Long, existingIds: Collection<Long>): Long {
+        val seen = existingIds.toHashSet()
+        var candidate = now.coerceAtLeast(1L)
+        while (candidate in seen) {
+            candidate = if (candidate == Long.MAX_VALUE) 1L else candidate + 1L
+        }
+        return candidate
+    }
+
     /**
      * Returns null for invalid or incomplete two-digit timer input.
      * Never silently clamp a user-requested duration to a different value.

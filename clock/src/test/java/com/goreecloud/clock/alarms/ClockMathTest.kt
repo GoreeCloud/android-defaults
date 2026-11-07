@@ -2,6 +2,7 @@ package com.goreecloud.clock.alarms
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import java.util.Calendar
 import java.util.TimeZone
@@ -13,6 +14,23 @@ class ClockMathTest {
             clear()
             set(year, month - 1, day, hour, minute)
         }.timeInMillis
+
+    @Test fun alarmIdentityDistinguishesCollidingLongHashCodes() {
+        // Java Long.hashCode() returns 1 for both of these distinct IDs.
+        val first = 1L
+        val second = 1L shl 32
+        assertEquals(first.hashCode(), second.hashCode())
+        assertNotEquals(ClockMath.alarmRequestData(first), ClockMath.alarmRequestData(second))
+    }
+
+    @Test fun alarmIdGenerationSkipsMillisecondCollision() {
+        assertEquals(1_002L, ClockMath.uniqueAlarmId(1_000L, listOf(1_000L, 1_001L)))
+        assertEquals(1L, ClockMath.uniqueAlarmId(0L, emptyList()))
+    }
+
+    @Test fun alarmIdGenerationWrapsAfterMaximumLong() {
+        assertEquals(2L, ClockMath.uniqueAlarmId(Long.MAX_VALUE, listOf(Long.MAX_VALUE, 1L)))
+    }
 
     @Test fun timerDurationUsesExactEnteredValues() {
         assertEquals(3_723_000L, ClockMath.timerDurationMillis("01", "02", "03"))

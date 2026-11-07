@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
@@ -55,11 +56,25 @@ object AlarmEngine {
 
     private fun alarmIntent(context: Context, id: Long): PendingIntent =
         PendingIntent.getBroadcast(
-            context, id.hashCode(),
+            context, 0,
             Intent(context, AlarmReceiver::class.java).setAction(ACTION_ALARM)
+                .setData(Uri.parse(ClockMath.alarmRequestData(id)))
                 .putExtra(EXTRA_ID, id),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+
+    // Old development previews used the Long.hashCode() as requestCode with no URI,
+    // which could alias distinct alarms. Cancel those legacy requests on upgrade.
+    private fun cancelLegacyAlarm(context: Context, id: Long) {
+        val legacy = PendingIntent.getBroadcast(
+            context, id.hashCode(),
+            Intent(context, AlarmReceiver::class.java).setAction(ACTION_ALARM)
+                .putExtra(EXTRA_ID, id),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+        ) ?: return
+        context.getSystemService(AlarmManager::class.java).cancel(legacy)
+        legacy.cancel()
+    }
 
     private fun timerIntent(context: Context): PendingIntent =
         PendingIntent.getBroadcast(
@@ -77,12 +92,14 @@ object AlarmEngine {
                 AlarmManager.AlarmClockInfo(at, openApp(context)),
                 alarmIntent(context, alarm.id),
             )
+            cancelLegacyAlarm(context, alarm.id)
             true
         } catch (_: SecurityException) { false }
     }
 
     fun cancelAlarm(context: Context, id: Long) {
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent(context, id))
+        cancelLegacyAlarm(context, id)
     }
 
     fun scheduleTimer(context: Context, deadline: Long): Boolean {
@@ -126,7 +143,7 @@ object AlarmEngine {
         }
     }
 
-    fun notifyAlert(context: Context, title: String, message: String, id: Int) {
+    fun notifyAlert(context: Context, title: String, message: String, tag: String) {
         if (!notificationsAllowed(context)) return
         createNotificationChannel(context)
         val notification = Notification.Builder(context, CHANNEL_ID)
@@ -138,7 +155,7 @@ object AlarmEngine {
             .setContentIntent(openApp(context))
             .build()
         try {
-            context.getSystemService(NotificationManager::class.java).notify(id, notification)
+            context.getSystemService(NotificationManager::class.java).notify(tag, 0, notification)
         } catch (_: SecurityException) {
             // Notification permission or channel access can change between check and post.
         }
@@ -160,13 +177,13 @@ class AlarmReceiver : BroadcastReceiver() {
                     // Avoid displaying an enabled repeating alarm with no next occurrence.
                     ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
                 }
-                AlarmEngine.notifyAlert(context, "Alarm", "It's time.", id.hashCode())
+                AlarmEngine.notifyAlert(context, "Alarm", "It's time.", "alarm-$id")
             }
             AlarmEngine.isTimerAction(intent.action) -> {
                 val deadline = ClockStore.timerDeadline(context)
                 if (deadline <= 0L || System.currentTimeMillis() + 1500L < deadline) return
                 ClockStore.setTimer(context, 0L, 0L)
-                AlarmEngine.notifyAlert(context, "Timer complete", "Your countdown has finished.", -1)
+                AlarmEngine.notifyAlert(context, "Timer complete", "Your countdown has finished.", "timer")
             }
         }
     }

@@ -286,7 +286,10 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                                     if (alarms.size >= 100) {
                                         notice = "You can save up to 100 alarms."
                                     } else {
-                                        updateAlarm(ClockAlarm(System.currentTimeMillis(), hour, minute))
+                                        updateAlarm(ClockAlarm(
+                                            ClockMath.uniqueAlarmId(System.currentTimeMillis(), alarms.map { it.id }),
+                                            hour, minute,
+                                        ))
                                     }
                                 },
                                 time.get(Calendar.HOUR_OF_DAY), time.get(Calendar.MINUTE),
