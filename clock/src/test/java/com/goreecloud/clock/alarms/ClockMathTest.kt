@@ -50,6 +50,23 @@ class ClockMathTest {
         ClockMath.nextAlarmAt(0L, 8, 0, 128, zone)
     }
 
+    @Test fun springForwardUsesNextValidLocalTime() {
+        val ny = TimeZone.getTimeZone("America/New_York")
+        fun local(month: Int, day: Int, hour: Int, minute: Int) =
+            Calendar.getInstance(ny).apply {
+                clear()
+                set(2026, month - 1, day, hour, minute)
+            }.timeInMillis
+        // The 02:30 local clock time does not exist on March 8, 2026.
+        assertEquals(local(3, 8, 3, 30),
+            ClockMath.nextAlarmAt(local(3, 7, 23, 0), 2, 30, 1 shl 6, ny))
+    }
+
+    @Test fun leapYearOneShotRollsIntoMarch() {
+        assertEquals(instant(2028, 3, 1, 6, 15),
+            ClockMath.nextAlarmAt(instant(2028, 2, 29, 8, 0), 6, 15, 0, zone))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun invalidHoursRejected() {
         ClockMath.nextAlarmAt(0L, 24, 0, 0, zone)

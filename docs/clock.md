@@ -2,10 +2,10 @@
 
 ## User experience
 
-- Floating bottom navigation: **Alarms**, **Timer**, **Stopwatch**, **Settings**, with selected-state indicators and accessible labels.
+- Floating bottom navigation: **Alarms**, **Timer**, **Stopwatch**, **Settings**, with selected-state indicators, accessible tab group semantics, and labels.
 - Alarms: add a local alarm, enable/disable it, select repeat weekdays and delete it. Scheduling uses Android AlarmManager.setAlarmClock and reschedules following reboot, time/time-zone adjustment and app replacement.
 - Timer: set a countdown, start, pause, resume and reset. An AlarmManager alarm notifies the user on completion even when the interface is not foregrounded.
-- Stopwatch: start, pause, reset and capture laps, with elapsed time maintained against Android elapsedRealtime.
+- Stopwatch: start, pause, reset and capture laps, with elapsed time maintained against Android elapsedRealtime. Fine-grained foreground updates run only while the app is visible; background rendering is suspended without stopping elapsed time.
 - Settings: system/light/dark appearance; notification and exact-alarm access state and shortcuts to system controls.
 
 ## Platform behavior

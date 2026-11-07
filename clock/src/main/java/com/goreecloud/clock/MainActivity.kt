@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
@@ -78,8 +79,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -96,11 +99,22 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private var refreshTick by mutableIntStateOf(0)
+    private var isVisible by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AlarmEngine.createNotificationChannel(this)
-        setContent { ClockApp(refreshTick) }
+        setContent { ClockApp(refreshTick, isVisible) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isVisible = true
+    }
+
+    override fun onStop() {
+        isVisible = false
+        super.onStop()
     }
 
     override fun onResume() {
@@ -134,7 +148,7 @@ private val gcDark = darkColorScheme(
 )
 
 @Composable
-private fun ClockApp(refreshToken: Int) {
+private fun ClockApp(refreshToken: Int, isVisible: Boolean) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(ClockTab.ALARMS) }
     var alarms by remember { mutableStateOf(ClockStore.alarms(context)) }
@@ -151,11 +165,15 @@ private fun ClockApp(refreshToken: Int) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var elapsedNow by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            elapsedNow = SystemClock.elapsedRealtime()
-            delay(100L)
+    // Compose survives activity stops. Update only while visible; stopwatch gets the
+    // faster foreground tick, while all other tabs update once per second.
+    LaunchedEffect(isVisible, tab, stopwatchStart) {
+        if (isVisible) {
+            while (true) {
+                now = System.currentTimeMillis()
+                elapsedNow = SystemClock.elapsedRealtime()
+                delay(if (tab == ClockTab.STOPWATCH && stopwatchStart > 0L) 50L else 1000L)
+            }
         }
     }
     // Keep the foreground countdown in sync with its persisted broadcast completion.
@@ -381,7 +399,8 @@ private fun FloatingDock(selected: ClockTab, onSelect: (ClockTab) -> Unit, modif
         border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.22f)),
         shadowElevation = 16.dp,
     ) {
-        Row(Modifier.padding(7.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.padding(7.dp).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             ClockTab.entries.forEach { item ->
                 val active = item == selected
                 Column(
@@ -609,6 +628,7 @@ private fun TimerPage(
                         if (text.length <= 2 && text.all { it.isDigit() }) change(text)
                     },
                     label = { Text(label) }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
                     textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center),
                 )
