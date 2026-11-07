@@ -628,7 +628,7 @@ private fun StopwatchPage(
             onClick = if (running) onLap else onReset,
             modifier = Modifier.weight(1f).heightIn(min = 52.dp),
         ) {
-            Icon(if (running) Icons.Outlined.Add else Icons.Outlined.Refresh, null)
+            Icon(if (running) Icons.Filled.Add else Icons.Outlined.Refresh, null)
             Spacer(Modifier.size(8.dp))
             Text(if (running) "Lap" else "Reset")
         }
