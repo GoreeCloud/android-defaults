@@ -41,7 +41,22 @@ jobs:
             echo "Unexpected sensitive Android permission in merged APK" >&2
             exit 1
           fi
-          echo "Clock APK identity, platform support, and offline privacy boundary verified."
+          # Inspect the merged binary manifest, not only the checked-in source.
+          # The boot/time/permission receiver must not accept arbitrary app broadcasts.
+          manifest="$("$aapt" dump xmltree "$apk" AndroidManifest.xml)"
+          for receiver in com.goreecloud.clock.alarms.AlarmReceiver com.goreecloud.clock.alarms.RescheduleReceiver; do
+            if ! printf '%s\n' "$manifest" | awk -v receiver="$receiver" '
+              /A: android:name/ && index($0, "\"" receiver "\"") {
+                found = 1
+                if (getline > 0 && /A: android:exported/ && /0x0$/) safe = 1
+              }
+              END { if (!found || !safe) exit 1 }
+            '; then
+              echo "Missing or exported internal receiver: $receiver" >&2
+              exit 1
+            fi
+          done
+          echo "Clock APK identity, platform support, private receivers, and offline privacy boundary verified."
       - uses: actions/upload-artifact@v4
         if: success()
         with:

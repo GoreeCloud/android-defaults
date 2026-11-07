@@ -19,7 +19,8 @@
             </intent-filter>
         </activity>
         <receiver android:name=".alarms.AlarmReceiver" android:exported="false" />
-        <receiver android:name=".alarms.RescheduleReceiver" android:exported="true">
+        <!-- System-only events; do not permit arbitrary third-party broadcasts. -->
+        <receiver android:name=".alarms.RescheduleReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.TIME_SET" />
