@@ -18,7 +18,7 @@ The app does not request INTERNET; stored times are local to the device and are 
 
 ## GoreeCloud UI
 
-The Compose light/dark colors are mapped from the versioned GoreeCloud UI token reference in GoreeCloud/gc-ui, tokens/gc.v1.tokens.json; product acceptance still requires rendered phone/tablet screenshots and accessibility review. The bottom dock uses a purposeful Lens-inspired raised surface with a solid fallback.
+The Compose light/dark colors are mapped from the versioned GoreeCloud UI token reference in GoreeCloud/gc-ui, tokens/gc.v1.tokens.json; product acceptance still requires rendered phone/tablet screenshots and accessibility review. The bottom dock uses a purposeful Lens-inspired raised surface with a solid fallback. The adaptive launcher icon uses approved GC UI semantic colors and a custom vector clock dial; actual launcher rendering remains subject to device review. System status/navigation icon contrast follows the selected appearance.
 
 ## Engineering validation
 

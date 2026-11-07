@@ -62,6 +62,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -80,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.goreecloud.clock.alarms.AlarmEngine
 import com.goreecloud.clock.alarms.ClockMath
@@ -186,6 +188,21 @@ private fun ClockApp(refreshToken: Int) {
         "dark" -> true
         "light" -> false
         else -> isSystemInDarkTheme()
+    }
+    // System bars follow the same verified GC UI appearance as the app canvas.
+    SideEffect {
+        val window = (context as? ComponentActivity)?.window
+        if (window != null) {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller.isAppearanceLightStatusBars = !dark
+            controller.isAppearanceLightNavigationBars = !dark
+            if (Build.VERSION.SDK_INT < 35) {
+                val color = if (dark) android.graphics.Color.rgb(16, 19, 30)
+                    else android.graphics.Color.rgb(236, 240, 248)
+                window.statusBarColor = color
+                window.navigationBarColor = color
+            }
+        }
     }
     MaterialTheme(colorScheme = if (dark) gcDark else gcLight) {
         val scheme = MaterialTheme.colorScheme
