@@ -99,21 +99,21 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private var refreshTick by mutableIntStateOf(0)
-    private var isVisible by mutableStateOf(false)
+    private var activityStarted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AlarmEngine.createNotificationChannel(this)
-        setContent { ClockApp(refreshTick, isVisible) }
+        setContent { ClockApp(refreshTick, activityStarted) }
     }
 
     override fun onStart() {
         super.onStart()
-        isVisible = true
+        activityStarted = true
     }
 
     override fun onStop() {
-        isVisible = false
+        activityStarted = false
         super.onStop()
     }
 
@@ -148,7 +148,7 @@ private val gcDark = darkColorScheme(
 )
 
 @Composable
-private fun ClockApp(refreshToken: Int, isVisible: Boolean) {
+private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(ClockTab.ALARMS) }
     var alarms by remember { mutableStateOf(ClockStore.alarms(context)) }
@@ -167,8 +167,8 @@ private fun ClockApp(refreshToken: Int, isVisible: Boolean) {
 
     // Compose survives activity stops. Update only while visible; stopwatch gets the
     // faster foreground tick, while all other tabs update once per second.
-    LaunchedEffect(isVisible, tab, stopwatchStart) {
-        if (isVisible) {
+    LaunchedEffect(activityStarted, tab, stopwatchStart) {
+        if (activityStarted) {
             while (true) {
                 now = System.currentTimeMillis()
                 elapsedNow = SystemClock.elapsedRealtime()
