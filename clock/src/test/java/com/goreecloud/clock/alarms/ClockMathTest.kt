@@ -15,6 +15,14 @@ class ClockMathTest {
             set(year, month - 1, day, hour, minute)
         }.timeInMillis
 
+    @Test fun expiredTimerDetectionHandlesBoundary() {
+        assertEquals(false, ClockMath.timerElapsed(0L, 100L))
+        assertEquals(false, ClockMath.timerElapsed(-5L, 100L))
+        assertEquals(false, ClockMath.timerElapsed(101L, 100L))
+        assertEquals(true, ClockMath.timerElapsed(100L, 100L))
+        assertEquals(true, ClockMath.timerElapsed(100L, 101L))
+    }
+
     @Test fun alarmIdentityDistinguishesCollidingLongHashCodes() {
         // Java Long.hashCode() returns 1 for both of these distinct IDs.
         val first = 1L

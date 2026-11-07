@@ -190,8 +190,19 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
         alarms = ClockStore.alarms(context)
         notificationsReady = AlarmEngine.notificationsAllowed(context)
         exactReady = AlarmEngine.exactAllowed(context)
-        deadline = ClockStore.timerDeadline(context)
-        pausedRemaining = ClockStore.timerRemaining(context)
+        val storedDeadline = ClockStore.timerDeadline(context)
+        if (ClockMath.timerElapsed(storedDeadline, System.currentTimeMillis())) {
+            // If Android never delivered the broadcast (e.g. an OEM background
+            // restriction), don't leave a completed timer stuck at 00:00.
+            AlarmEngine.cancelTimer(context)
+            ClockStore.setTimer(context, 0L, 0L)
+            deadline = 0L
+            pausedRemaining = 0L
+            notice = "Your previous timer elapsed. If no alert appeared, review Android notification settings."
+        } else {
+            deadline = storedDeadline
+            pausedRemaining = ClockStore.timerRemaining(context)
+        }
         themeMode = ClockStore.theme(context)
         stopwatchAccumulated = ClockStore.stopwatchAccumulated(context)
         stopwatchStart = ClockStore.stopwatchStart(context)
@@ -372,6 +383,9 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                         notificationsAllowed = notificationsReady,
                         exactAllowed = exactReady,
                         onPermissionsChanged = {
+                            // Permission dialog callbacks may arrive without a separate
+                            // Activity resume. Restore saved schedules immediately.
+                            AlarmEngine.reconcileSchedules(context)
                             notificationsReady = AlarmEngine.notificationsAllowed(context)
                             exactReady = AlarmEngine.exactAllowed(context)
                         },

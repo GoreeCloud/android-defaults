@@ -5,6 +5,10 @@ import java.util.TimeZone
 
 /** Monday is bit zero; Sunday is bit six. A zero bitmask denotes a one-shot alarm. */
 object ClockMath {
+    /** Only persisted, positive deadlines qualify as an elapsed countdown. */
+    fun timerElapsed(deadline: Long, now: Long): Boolean =
+        deadline > 0L && now >= deadline
+
     /** Full 64-bit identity; requestCode (Int) and Intent extras alone can collide. */
     fun alarmRequestData(id: Long): String = "goreecloud-clock://alarm/$id"
 
