@@ -12,14 +12,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      # Verified upstream commit (checkout v7.0.1), never a mutable tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # setup-java v6 (v1-v4 deprecated), exact upstream commit.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      # setup-gradle v6.4.1, dereferenced annotated Git tag to commit.
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
         with:
           gradle-version: '9.5.0'
+      - name: Verify CI action references are commit-pinned
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/android.yml").read_text()
+          refs = re.findall(r"^\s*-\s*uses:\s*([^\s#]+)", workflow, re.MULTILINE)
+          if len(refs) != 4:
+              raise SystemExit(f"Expected four reviewed vendor actions, found {len(refs)}")
+          for ref in refs:
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}", ref):
+                  raise SystemExit(f"Unpinned or unexpected GitHub Action: {ref}")
+          print("All four reviewed vendor actions pinned to exact 40-character commits.")
+          PY
       - name: Validate GoreeShield backup and transfer exclusion policy
         shell: bash
         run: |
@@ -95,10 +116,13 @@ jobs:
           grep -Fq "E: device-transfer" <<< "$extraction"
           "$aapt" dump xmltree "$apk" res/xml/backup_rules.xml > /dev/null
           echo "Clock APK identity, platform support, private receivers, offline permissions, and extraction rules verified."
-      - uses: actions/upload-artifact@v4
+      # upload-artifact v7.0.2, exact upstream commit; retain ZIP only as
+      # internal CI transport (the delivered installation file is standalone).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: success()
         with:
           name: goreecloud-clock-debug-apk
           path: clock/build/outputs/apk/debug/clock-debug.apk
           if-no-files-found: error
           retention-days: 7
+          archive: true

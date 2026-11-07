@@ -22,6 +22,8 @@ The Compose light/dark colors are mapped from the versioned GoreeCloud UI token 
 
 ## Engineering validation
 
+The GitHub Actions workflow pins its checkout, Java setup, Gradle setup and artifact-upload actions to verified upstream **full commit IDs** rather than mutable major-version tags. It runs a source-level pinning regression check, disables persistent checkout credentials, and restricts job permissions to read-only repository contents. The supported actions are run on GitHub-hosted runners, and the workflow must pass before this security maintenance is considered validated. Upgrade and review action pins deliberately; a pinned commit prevents moving-tag drift but does not guarantee an upstream action is safe.
+
 CI runs :clock:testDebugUnitTest, :clock:assembleDebug and :clock:lintDebug, and validates source backup-exclusion policies plus the packaged APK's app identity, sensitive-permission restrictions, non-exported receiver declarations, and backup-rule resources.
 
 **Last verified code run before this change:** [GitHub Actions #42338343449](https://github.com/GoreeCloud/android-defaults/actions/runs/42338343449) passed on commit `30f0458` (19 JVM unit tests, debug APK, Lint, merged-receiver and permission checks, and backup exclusion validation). The new overdue-timer/notification-permission reconciliation change requires its own passing CI, and no Android device runtime acceptance is claimed.
