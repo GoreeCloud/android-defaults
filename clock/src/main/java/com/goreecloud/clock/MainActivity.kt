@@ -79,6 +79,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -544,13 +546,27 @@ private fun AlarmPage(
                         }
                     }
                 }
-                Switch(checked = alarm.enabled, onCheckedChange = { onToggle(alarm, it) })
+                Switch(
+                    checked = alarm.enabled,
+                    onCheckedChange = { onToggle(alarm, it) },
+                    modifier = Modifier.semantics {
+                        contentDescription = String.format(
+                            Locale.getDefault(), "Alarm at %02d:%02d, %s",
+                            alarm.hour, alarm.minute,
+                            if (alarm.repeatDays == 0) "one time"
+                            else weekdaysLabel(alarm.repeatDays),
+                        )
+                    },
+                )
             }
         }
     }
 }
 
 private val weekdays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+private val weekdayNames = listOf(
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+)
 private fun weekdaysLabel(mask: Int): String =
     if (mask == 127) "Every day" else weekdays.filterIndexed { index, _ ->
         mask and (1 shl index) != 0
@@ -574,6 +590,9 @@ private fun RepeatEditor(alarm: ClockAlarm, onDismiss: () -> Unit, onSave: (Int)
                             FilterChip(
                                 selected = selected,
                                 onClick = { mask = mask xor (1 shl dayIndex) },
+                                modifier = Modifier.semantics {
+                                    contentDescription = weekdayNames[dayIndex]
+                                },
                                 label = { Text(name.take(2), fontSize = 11.sp) },
                             )
                         }
