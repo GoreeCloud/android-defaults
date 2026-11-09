@@ -191,4 +191,30 @@ class DialerRuntimeSmokeTest {
         } finally { scenario.close() }
     }
 
+    @Test fun keypadDigitsDeleteAndLongPressZeroAreAccessibleWithoutCalling() {
+        val scenario = ActivityScenario.launch(DialerActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                val root = activity.window.decorView
+                fun key(description: String): View = descendants(root).first {
+                    it.contentDescription?.toString() == description
+                }
+                val edit = descendants(root).filterIsInstance<EditText>().first()
+                assertEquals("", edit.text.toString())
+                key("2, ABC").performClick()
+                key("3, DEF").performClick()
+                key("Zero. Long press for plus").performClick()
+                assertEquals("230", edit.text.toString())
+                button(root, "⌫").performClick()
+                assertEquals("23", edit.text.toString())
+                assertTrue(key("Zero. Long press for plus").performLongClick())
+                assertEquals("23+", edit.text.toString())
+                assertTrue(button(root, "⌫").performLongClick())
+                assertEquals("", edit.text.toString())
+            }
+        } finally {
+            scenario.close()
+        }
+    }
+
 }
