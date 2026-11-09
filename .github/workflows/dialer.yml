@@ -96,6 +96,10 @@ jobs:
                   assert expected <= found, name
           print("Dialer permissions, role binding and transfer exclusions verified in source.")
           PY
+      - name: Test read-only Android device preflight with synthetic ADB
+        run: |
+          bash -n dialer/ci/device-preflight.sh
+          python3 -m unittest discover -s dialer/ci/tests -p 'test_*.py' -v
       - name: Kotlin tests, APK build, Android lint
         working-directory: dialer
         run: gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon --stacktrace

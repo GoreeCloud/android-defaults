@@ -14,6 +14,21 @@ The pinned CI workflow at [Android Dialer CI](../../.github/workflows/dialer.yml
 
 **Limits:** These tests do not initiate cellular calls or emulate real OEM/telecom/carrier routing. A green CI run is not call-quality or emergency-readiness certification.
 
+### Safe device-readiness check
+
+Run `bash dialer/ci/device-preflight.sh [--serial ADB_SERIAL]` only against an
+**authorized dedicated test phone**. The script checks ADB connectivity,
+Android API 26+, the installed Dialer package, advertised telephony
+hardware, and the default Phone role on API 29+. It does **not** install
+APKs, place calls, change settings, inspect contacts/SIM/call history,
+capture logs, or print device serials. It refuses zero or ambiguous devices,
+and treats a role-holder result as a preliminary observation rather than
+proof of effective routing or emergency-call safety.
+
+The ten synthetic-ADB CI tests confirm the script's read-only command
+allowlist and its failure handling. Those mocked tests are not physical
+telephony acceptance.
+
 ## Physical-device test matrix (required before release)
 
 Use a secondary, explicitly authorized Android test phone with rollback in
