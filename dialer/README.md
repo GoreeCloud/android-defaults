@@ -22,7 +22,7 @@ cd dialer
 gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
-The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a development build, **not** a standalone APK delivered through GoreeCloud/Artifacts or a phone-tested release. The repository's GitHub Actions workflow validates source policy, JVM tests, assembly, lint and packaged APK privacy policy. Separate disposable Android 26 and 35 emulator jobs exercise installed UI navigation, dial intents and requested permissions; these are not carrier-call acceptance. CI archives are not standalone signed-delivery confirmation.
+The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a development build, **not** a standalone APK delivered through GoreeCloud/Artifacts or a phone-tested release. The repository's GitHub Actions workflow validates source policy, JVM tests, assembly, lint and packaged APK privacy policy. Separate disposable Android 26, 35 and 36 emulator jobs exercise installed UI navigation, dial intents and requested permissions; these are not carrier-call acceptance. CI archives are not standalone signed-delivery confirmation.
 
 
 
@@ -69,7 +69,7 @@ The broader product proposal includes call screening, on-device spam defenses, A
 ## Verification gates before release
 
 1. CI unit tests, lint, APK metadata and manifest/permissions inspection.
-2. Disposable Android 26/35 emulator smoke tests: keypad/navigation, populated `tel:` intent, permission gating and packaged permission checks. Actual Telecom call lifecycle and notification interactions are not yet exercised.
+2. Disposable Android 26/35/36 emulator smoke tests: keypad/navigation, populated `tel:` intent, permission gating and packaged permission checks. Actual Telecom call lifecycle and notification interactions are not yet exercised.
 3. Representative physical devices: dual SIM, carrier calls, DTMF, Bluetooth, locked-screen notifications and OEM battery management.
 4. Privacy, accessibility, emergency-call preservation and platform policy review; inspect UI screenshots against GoreeCloud UI.
 5. Record verified signing/provenance/checksum; deliver standalone signed APK in authorized `GoreeCloud/Artifacts/` if an APK delivery is requested.

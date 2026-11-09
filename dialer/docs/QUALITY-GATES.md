@@ -9,8 +9,8 @@ The pinned CI workflow at [Android Dialer CI](../../.github/workflows/dialer.yml
 - Unit tests: phone-number validation and T9 behavior.
 - Android Lint, debug assembly, and packaged APK name/Internet-permission checks.
 - Non-exported notification action receiver, system-bound `InCallService`, no `INTERNET`, `READ_SMS`, or `WRITE_CALL_LOG` permission, and explicit cloud/device transfer exclusions.
-- Disposable Android 26 and Android 35 emulator instrumentation: offline 4-tab navigation, `tel:` deeplink, package permissions, and local Favorites persistence/cleanup.
-- Emulator screenshot artifacts include the rendered default keypad and 1.5× Android system font-scale keypad on API 26/35, plus an Android 35 system dark-mode keypad. The job verifies the keypad heading **and visible primary Call control** in Android's accessibility hierarchy before capture. At large font sizes, the Call action remains pinned above the floating dock while the dial keys scroll. Screenshots must be opened and reviewed before any visual-acceptance assertion.
+- Disposable Android 26, Android 35 and Android 36 emulator instrumentation: offline 4-tab navigation, `tel:` deeplink, package permissions, and local Favorites persistence/cleanup.
+- Emulator screenshot artifacts include the rendered default keypad and 1.5× Android system font-scale keypad on API 26/35/36, plus Android 35/36 system dark-mode keypads. The job verifies the keypad heading **and visible primary Call control** in Android's accessibility hierarchy before capture. At large font sizes, the Call action remains pinned above the floating dock while the dial keys scroll. Screenshots must be opened and reviewed before any visual-acceptance assertion.
 
 **Limits:** These tests do not initiate cellular calls or emulate real OEM/telecom/carrier routing. A green CI run is not call-quality or emergency-readiness certification.
 
@@ -58,6 +58,7 @@ to public issues, CI logs or screenshot artifacts.
 - Contact and call-log provider reads are now serialized on a background
   executor with bounded cursor scans, actual Android provider cancellation signals
   and request-generation guards.
+  **Android 16 compatibility and performance acceptance remain independent of emulator smoke.**
   **Performance acceptance is still open**: the current emulator suite does not
   inject slow/malformed providers or large data sets, and device jank has not
   been measured. Query caches are in-memory and invalidated on Activity resume.
