@@ -16,9 +16,7 @@
         android:usesCleartextTraffic="false">
         <activity
             android:name=".DialerActivity"
-            android:exported="true"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
