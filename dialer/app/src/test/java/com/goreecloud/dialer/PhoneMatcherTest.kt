@@ -7,19 +7,37 @@ class PhoneMatcherTest {
     @Test fun normalizesInternationalAndDtmf() {
         assertEquals("+12025550199", PhoneMatcher.cleanNumber("+1 (202) 555-0199"))
         assertEquals("*#06#", PhoneMatcher.cleanNumber("*#06#"))
+        assertEquals("2025550100", PhoneMatcher.cleanNumber("٢٠٢-٥٥٥-٠١٠٠"))
     }
+
+    @Test fun refusesNonNumbersRatherThanSilentlyCallingTheirDigits() {
+        assertNull(PhoneMatcher.cleanNumber("CALL911"))
+        assertNull(PhoneMatcher.cleanNumber("tel:911"))
+        assertNull(PhoneMatcher.cleanNumber("202x555"))
+        assertNull(PhoneMatcher.cleanNumber("202;555"))
+    }
+
     @Test fun rejectsInvalidEmptyAndOversized() {
         assertNull(PhoneMatcher.cleanNumber(" - "))
         assertNull(PhoneMatcher.cleanNumber("12+3"))
+        assertNull(PhoneMatcher.cleanNumber("+++"))
+        assertNull(PhoneMatcher.cleanNumber("+"))
+        assertNull(PhoneMatcher.cleanNumber("#"))
         assertNull(PhoneMatcher.cleanNumber("+".repeat(41)))
+        assertNull(PhoneMatcher.cleanNumber("1".repeat(41)))
     }
-    @Test fun matchesT9AndNumberSubstrings() {
+
+    @Test fun matchesT9NumbersAndAccentedNames() {
         assertEquals("25423", PhoneMatcher.t9("Alice"))
+        assertEquals("3674", PhoneMatcher.t9("Éric"))
         assertTrue(PhoneMatcher.matches("254", "Alice", "555-0100"))
         assertTrue(PhoneMatcher.matches("0100", "Alice", "555-0100"))
+        assertTrue(PhoneMatcher.matches("367", "Éric", "555-0100"))
         assertFalse(PhoneMatcher.matches("999", "Alice", "555-0100"))
     }
+
     @Test fun emptyQueryDoesNotMatchAllContacts() {
         assertFalse(PhoneMatcher.matches("", "Alice", "555-0100"))
+        assertFalse(PhoneMatcher.matches("#", "Alice", "555-0100"))
     }
 }
