@@ -7,6 +7,7 @@ An independently buildable **native Kotlin Android** phone app in the `GoreeClou
 - Android `ACTION_DIAL` handler, keypad with long-press +, backspace/long-press clear, strict number validation, Telecom calling, and request to become default Phone app through `ROLE_DIALER`.
 - `InCallService` integration, Android 12+ native `CallStyle` notifications (legacy notifications on Android 8–11), call-specific notification action tokens, Android Telecom foreground requests, answer/reject/end, mute, supported audio-output routes, hold/resume, and DTMF.
 - Optional, on-device contacts and T9/number search, contact-provider creation hand-off, contact calling/SMS, and local recent-call number search with All/Missed/Incoming/Outgoing/Declined filters (last 150 accessible records).
+- Contacts and Call Log provider queries use a serial background executor, loading/error states, permission rechecks and request-generation guards to prevent stale Activity callbacks. No raw provider results are written to persistent app storage.
 - Telecom/CallLog presentation flags are respected for private/withheld caller IDs. No caller number or contact name is included in call notifications.
 - Light/dark app-local GoreeCloud UI semantic mappings, touch-friendly native controls, labels, and in-call state handling.
 - GoreeShield: no Internet or trackers, no recording, no background contact uploads, opt-in runtime access to contacts/call history, cloud/transfer backup exclusion.
