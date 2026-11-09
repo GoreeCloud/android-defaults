@@ -245,7 +245,7 @@ class DialerActivity : Activity() {
                     background = rounded(R.color.surface, 20)
                     isClickable = true
                     isFocusable = true
-                    minHeight = dp(76)
+                    minimumHeight = dp(76)
                     setPadding(dp(4), dp(5), dp(4), dp(5))
                     contentDescription = if (digit == "0") "Zero. Long press for plus"
                         else if (letters.isEmpty()) digit else "$digit, $letters"
