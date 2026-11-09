@@ -53,7 +53,11 @@ class DialerActivity : Activity() {
     }
 
     private data class Contact(val name: String, val number: String)
-    private data class Recent(val number: String, val type: Int, val whenMs: Long, val seconds: Long)
+    private data class Recent(val number: String, val type: Int, val whenMs: Long,
+        val seconds: Long, val presentation: Int) {
+        fun visibleNumber(): String =
+            if (presentation == CallLog.Calls.PRESENTATION_ALLOWED) number else ""
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -266,10 +270,23 @@ class DialerActivity : Activity() {
             return
         }
         val ringing = call.state == Call.STATE_RINGING
-        val number = call.details.handle?.schemeSpecificPart.orEmpty()
-        val name = call.details.callerDisplayName?.toString()?.takeIf { it.isNotBlank() }
-            ?: queryContacts().firstOrNull { it.number.filter(Char::isDigit) == number.filter(Char::isDigit) }?.name
-            ?: number.ifEmpty { "Unknown caller" }
+        // Respect the carrier/Telecom presentation flags, including withheld callers.
+        val presentation = call.details.handlePresentation
+        val canPresent = presentation == TelecomManager.PRESENTATION_ALLOWED
+        val number = if (canPresent) call.details.handle?.schemeSpecificPart.orEmpty() else ""
+        val name = if (!canPresent) {
+            when (presentation) {
+                TelecomManager.PRESENTATION_RESTRICTED -> "Private caller"
+                TelecomManager.PRESENTATION_PAYPHONE -> "Payphone"
+                else -> "Unknown caller"
+            }
+        } else {
+            call.details.callerDisplayName?.toString()?.takeIf { it.isNotBlank() }
+                ?: queryContacts().firstOrNull {
+                    it.number.filter(Char::isDigit) == number.filter(Char::isDigit)
+                }?.name
+                ?: number.ifEmpty { "Unknown caller" }
+        }
         val state = when (call.state) {
             Call.STATE_RINGING -> "Incoming call"
             Call.STATE_ACTIVE -> "Connected"
@@ -395,12 +412,13 @@ class DialerActivity : Activity() {
             val result = mutableListOf<Recent>()
             contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
-                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
+                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE,
+                    CallLog.Calls.DURATION, CallLog.Calls.NUMBER_PRESENTATION),
                 null, null, "${CallLog.Calls.DATE} DESC"
             )?.use { cursor ->
                 while (cursor.moveToNext() && result.size < 150) {
                     result.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
-                        cursor.getLong(2), cursor.getLong(3)))
+                        cursor.getLong(2), cursor.getLong(3), cursor.getInt(4)))
                 }
             }
             result
@@ -452,7 +470,7 @@ class DialerActivity : Activity() {
                     else -> true
                 }
             }
-            .filter { it.number.contains(recentSearch.trim(), ignoreCase = true) }
+            .filter { it.visibleNumber().contains(recentSearch.trim(), ignoreCase = true) }
             .take(60)
             .toList()
         fun fillResults() {
@@ -469,18 +487,18 @@ class DialerActivity : Activity() {
                     CallLog.Calls.REJECTED_TYPE -> "Declined"
                     else -> "Call"
                 }
-                val number = entry.number.ifBlank { "Private or unknown" }
+                val number = entry.visibleNumber().ifBlank { "Private or unknown" }
                 val card = column(8).apply { background = rounded(R.color.surface, 18) }
                 card.addView(label(number, 17f, R.color.text_main, true))
                 card.addView(label("$kind · ${DateUtils.getRelativeTimeSpanString(entry.whenMs)} · ${entry.seconds}s",
                     13f, R.color.text_soft))
-                if (entry.number.isNotBlank()) {
+                if (entry.visibleNumber().isNotBlank()) {
                     card.addView(twoActions("Call" to {
                         enteredNumber = entry.number
                         placeCall()
                     }, "Message" to { openSms(entry.number) }))
                 }
-                if (entry.number.isNotBlank()) {
+                if (entry.visibleNumber().isNotBlank()) {
                     card.addView(action("Add to contacts", R.color.surface_tonal, R.color.text_main) {
                         createContact(entry.number)
                     })
