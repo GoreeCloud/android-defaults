@@ -8,4 +8,10 @@ The [Dialer source](dialer/) is a Kotlin Android application intended to request
 
 **Development preview only.** The app has not yet been accepted on physical devices or approved as an emergency-calling replacement. Read the [Dialer setup and feature status](dialer/README.md) before changing your default phone app.
 
-Other products, including the Clock, may be developed in separate pull requests; their existence in a PR does not mean they are on this branch.
+## GoreeCloud Contacts
+
+The [Contacts source](contacts/) is a separate native Kotlin Android development preview with opt-in on-device contact reading, search, app-local favorites, native group browsing, contact details, user-confirmed Android add/edit, calling/messaging shortcuts, explicit sharing and partial vCard export, and duplicate suggestions. It declares **no Internet or WRITE_CONTACTS permission**.
+
+See [Contacts setup, limitations and feature register](contacts/README.md). The Dialer and Contacts remain independent applications with distinct package identities.
+
+Other products, including Clock, may be developed in separate pull requests; their existence in a PR does not mean they are on this branch.
