@@ -106,7 +106,9 @@ class PhoneInCallService : InCallService() {
     }
 
     override fun onDestroy() {
-        notifications.cancel(NOTIFICATION_ID)
+        // A replaced Telecom service must not cancel its successor's ongoing
+        // notification. CallSession.unbind() applies the same owner guard.
+        if (CallSession.service === this) notifications.cancel(NOTIFICATION_ID)
         availableEndpoints = emptyList()
         selectedEndpoint = null
         CallSession.unbind(this)
