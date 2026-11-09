@@ -62,7 +62,7 @@ jobs:
           for banned in ("applyBatch(", "contentResolver.delete(", "contentResolver.insert(", "WRITE_CONTACTS"):
               assert banned not in code, banned
           workflow = Path(".github/workflows/contacts.yml").read_text()
-          uses = re.findall(r"^\s*- uses:\s*(\S+)", workflow, re.M)
+          uses = re.findall(r"^\s*(?:-\s*)?uses:\s*(\S+)", workflow, re.M)
           pins = {
               "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "actions/setup-java": "b843ebf9b913146b38da2eaa7aeddf76074ae1ad",
