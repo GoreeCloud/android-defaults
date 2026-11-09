@@ -23,6 +23,7 @@ emergency-calling device while preview validation is incomplete.
 | Area | Acceptance check |
 | --- | --- |
 | Role/permissions | Role request, refusal, removal and regrant; denied Contacts, Call Log, and Notifications permissions |
+| Without telephony | Android without default Phone role shows unavailable state, does not attempt to place calls, and remains usable for offline contacts; this needs a dedicated non-telephony emulator/device run |
 | Calling | Outgoing/incoming carrier calls, hangup, ringtone, caller ID presentation, hidden/private numbers, call waiting |
 | Controls | Answer, decline, mute, hold/resume, DTMF, speaker/wired/Bluetooth endpoint changes |
 | Dual SIM/conference | Choice of account, call swap, add-call and conference merge only when platform advertises support |

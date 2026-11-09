@@ -768,15 +768,25 @@ class DialerActivity : Activity() {
 
     private fun renderSettings(body: LinearLayout) {
         body.addView(label("Phone app", 21f, R.color.text_main, true))
+        val available = supportsPhoneRole()
         val active = isDefaultPhone()
         val status = column(16).apply { background = rounded(R.color.surface, 20) }
-        status.addView(label(if (active) "Default Phone app active" else "Default Phone app not selected", 19f, R.color.text_main, true))
+        val title = when {
+            !available -> "Phone role is not available on this device"
+            active -> "Default Phone app active"
+            else -> "Default Phone app not selected"
+        }
+        status.addView(label(title, 19f, R.color.text_main, true))
         status.addView(label(
-            if (active) "Android Telecom can connect incoming and ongoing calls to GoreeCloud Dialer."
+            if (!available) "Android does not offer a default Phone app role here. " +
+                "Contacts and local UI remain usable, but cellular calling is unavailable."
+            else if (active) "Android Telecom can connect incoming and ongoing calls to GoreeCloud Dialer."
             else "Choose GoreeCloud Dialer as your default Phone app to enable call handling.",
             14f, R.color.text_soft
         ))
-        status.addView(action(if (active) "Manage default apps" else "Make default Phone app", R.color.brand, R.color.on_brand) {
+        if (available) status.addView(action(
+            if (active) "Manage default apps" else "Make default Phone app",
+            R.color.brand, R.color.on_brand) {
             requestPhoneRole()
         })
         body.addView(status)
@@ -1010,7 +1020,11 @@ class DialerActivity : Activity() {
             return
         }
         val uri = Uri.fromParts("tel", number, null)
-        val telecom = getSystemService(TelecomManager::class.java)
+        val telecom: TelecomManager? = getSystemService(TelecomManager::class.java)
+        if (telecom == null || !supportsPhoneRole()) {
+            showError("Android does not support Phone calling on this device.")
+            return
+        }
         if (!isDefaultPhone()) {
             AlertDialog.Builder(this)
                 .setTitle("Default Phone app required")
@@ -1039,24 +1053,41 @@ class DialerActivity : Activity() {
     }
 
     private fun isDefaultPhone(): Boolean {
-        val telecom = getSystemService(TelecomManager::class.java)
-        return telecom.defaultDialerPackage == packageName
+        val telecom: TelecomManager? = getSystemService(TelecomManager::class.java)
+        return telecom?.defaultDialerPackage == packageName
+    }
+
+    private fun supportsPhoneRole(): Boolean {
+        if (Build.VERSION.SDK_INT >= 29) {
+            return getSystemService(RoleManager::class.java)
+                ?.isRoleAvailable(RoleManager.ROLE_DIALER) == true
+        }
+        return getSystemService(TelecomManager::class.java) != null
     }
 
     private fun requestPhoneRole() {
-        if (Build.VERSION.SDK_INT >= 29) {
-            val roles = getSystemService(RoleManager::class.java)
-            if (roles.isRoleAvailable(RoleManager.ROLE_DIALER)) {
+        if (!supportsPhoneRole()) {
+            showError("Android does not offer a default Phone app role on this device.")
+            return
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                val roles = getSystemService(RoleManager::class.java)
+                    ?: run { showError("Android Phone role service is unavailable."); return }
                 if (!roles.isRoleHeld(RoleManager.ROLE_DIALER)) {
                     startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_DIALER), 301)
                 } else {
                     startActivity(Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"))
                 }
-                return
+            } else {
+                startActivity(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+                    .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName))
             }
+        } catch (_: android.content.ActivityNotFoundException) {
+            showError("Android Phone app settings could not be opened.")
+        } catch (_: SecurityException) {
+            showError("Android blocked the Phone app settings request.")
         }
-        startActivity(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
-            .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName))
     }
 
     /** Read-only details are displayed by the user's chosen contact provider. */
