@@ -11,6 +11,7 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telecom.Call
@@ -54,10 +55,12 @@ class DialerActivity : Activity() {
     private var contacts: List<Contact>? = null
     private var contactsLoading = false
     private var contactsFailed = false
+    private var contactsCancellation: CancellationSignal? = null
     private val contactsGeneration = RequestGeneration()
     private var recentCalls: List<Recent>? = null
     private var recentsLoading = false
     private var recentsFailed = false
+    private var recentsCancellation: CancellationSignal? = null
     private val recentsGeneration = RequestGeneration()
     private val refreshCalls: () -> Unit = {
         runOnUiThread {
@@ -75,7 +78,21 @@ class DialerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        readIntent(intent)
+        if (savedInstanceState != null) {
+            // Only Activity-owned UI state is restored. Provider contents and
+            // Telecom call objects are never serialized or persisted here.
+            screen = savedInstanceState.getString(STATE_SCREEN, "keypad")
+                .takeIf { it in listOf("keypad", "recents", "contacts", "settings", "call") }
+                ?: "keypad"
+            enteredNumber = savedInstanceState.getString(STATE_DRAFT, "")
+            recentSearch = savedInstanceState.getString(STATE_RECENT_SEARCH, "")
+            recentFilter = savedInstanceState.getString(STATE_RECENT_FILTER, "All")
+            contactFilter = savedInstanceState.getString(STATE_CONTACT_SEARCH, "")
+            favoritesOnly = savedInstanceState.getBoolean(STATE_FAVORITES_ONLY, false)
+            if (screen == "call" && CallSession.foreground() == null) screen = "keypad"
+            // Incoming Telecom intents still take precedence over a saved tab.
+            if (intent?.getBooleanExtra(EXTRA_CALL_SCREEN, false) == true) readIntent(intent)
+        } else readIntent(intent)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(color(R.color.canvas))
@@ -98,6 +115,18 @@ class DialerActivity : Activity() {
         }
         setContentView(root)
         render()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        // Android-managed Activity state only; not SharedPreferences, backup,
+        // analytics or network. Restore partial keypad edits across rotation.
+        outState.putString(STATE_SCREEN, screen)
+        outState.putString(STATE_DRAFT, enteredNumber)
+        outState.putString(STATE_RECENT_SEARCH, recentSearch)
+        outState.putString(STATE_RECENT_FILTER, recentFilter)
+        outState.putString(STATE_CONTACT_SEARCH, contactFilter)
+        outState.putBoolean(STATE_FAVORITES_ONLY, favoritesOnly)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onNewIntent(newIntent: Intent) {
@@ -142,13 +171,16 @@ class DialerActivity : Activity() {
 
     override fun onDestroy() {
         // Invalidate callbacks before stopping work; never post into a dead UI.
-        contactsGeneration.invalidate()
-        recentsGeneration.invalidate()
+        invalidateProviderCaches()
         providerExecutor.shutdownNow()
         super.onDestroy()
     }
 
     private fun invalidateProviderCaches() {
+        contactsCancellation?.cancel()
+        recentsCancellation?.cancel()
+        contactsCancellation = null
+        recentsCancellation = null
         contactsGeneration.invalidate()
         recentsGeneration.invalidate()
         contacts = null
@@ -811,6 +843,8 @@ class DialerActivity : Activity() {
         if (!contactsLoading) {
             contactsLoading = true
             val generation = contactsGeneration.next()
+            val signal = CancellationSignal()
+            contactsCancellation = signal
             providerExecutor.execute {
                 val list = mutableListOf<Contact>()
                 var failed = false
@@ -820,7 +854,8 @@ class DialerActivity : Activity() {
                         arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                             ContactsContract.CommonDataKinds.Phone.NUMBER,
                             ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
-                        null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+                        null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC",
+                        signal
                     )?.use { cursor ->
                         while (cursor.moveToNext() && list.size < 1500) {
                             val number = cursor.getString(1).orEmpty()
@@ -844,6 +879,7 @@ class DialerActivity : Activity() {
                         contacts = list
                         contactsFailed = failed
                     }
+                    contactsCancellation = null
                     contactsLoading = false
                     // Do not tear down a focused number editor while the user
                     // is typing: the next edit refreshes the suggestion list.
@@ -862,6 +898,8 @@ class DialerActivity : Activity() {
         if (!recentsLoading) {
             recentsLoading = true
             val generation = recentsGeneration.next()
+            val signal = CancellationSignal()
+            recentsCancellation = signal
             providerExecutor.execute {
                 val list = mutableListOf<Recent>()
                 var failed = false
@@ -871,7 +909,7 @@ class DialerActivity : Activity() {
                         arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE,
                             CallLog.Calls.DATE, CallLog.Calls.DURATION,
                             CallLog.Calls.NUMBER_PRESENTATION),
-                        null, null, "${CallLog.Calls.DATE} DESC"
+                        null, null, "${CallLog.Calls.DATE} DESC", signal
                     )?.use { cursor ->
                         while (cursor.moveToNext() && list.size < 150) {
                             list.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
@@ -890,6 +928,7 @@ class DialerActivity : Activity() {
                         recentCalls = list
                         recentsFailed = failed
                     }
+                    recentsCancellation = null
                     recentsLoading = false
                     if (screen == "recents") render()
                 }
@@ -923,6 +962,7 @@ class DialerActivity : Activity() {
             // Official Android Telecom path includes platform emergency routing to the
             // preloaded system dialer when appropriate, without app-side guessing.
             telecom.placeCall(uri, Bundle.EMPTY)
+            enteredNumber = "" // Avoid accidental re-dial after returning to keypad.
             screen = "call"
             render()
         } catch (_: SecurityException) {
@@ -1030,6 +1070,12 @@ class DialerActivity : Activity() {
     }
 
     companion object {
+        private const val STATE_SCREEN = "goreecloud.dialer.state.SCREEN"
+        private const val STATE_DRAFT = "goreecloud.dialer.state.DRAFT"
+        private const val STATE_RECENT_SEARCH = "goreecloud.dialer.state.RECENT_SEARCH"
+        private const val STATE_RECENT_FILTER = "goreecloud.dialer.state.RECENT_FILTER"
+        private const val STATE_CONTACT_SEARCH = "goreecloud.dialer.state.CONTACT_SEARCH"
+        private const val STATE_FAVORITES_ONLY = "goreecloud.dialer.state.FAVORITES_ONLY"
         const val EXTRA_CALL_SCREEN = "com.goreecloud.dialer.extra.CALL_SCREEN"
         const val EXTRA_DTMF = "com.goreecloud.dialer.extra.DTMF"
     }
