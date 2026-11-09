@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App-local semantic mappings; not claims about shared GC UI token hex values. -->
+    <color name="canvas">#F3F6FC</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_tonal">#E7EDFA</color>
+    <color name="brand">#244EA4</color>
+    <color name="on_brand">#FFFFFF</color>
+    <color name="text_main">#17243A</color>
+    <color name="text_soft">#52637C</color>
+    <color name="outline">#CED7E7</color>
+    <color name="positive">#00684E</color>
+    <color name="negative">#B42335</color>
+</resources>

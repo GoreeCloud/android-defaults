@@ -1,0 +1,87 @@
+name: Android Dialer CI
+on:
+  pull_request:
+    paths:
+      - "dialer/**"
+      - ".github/workflows/dialer.yml"
+      - "LICENSE"
+      - "README.md"
+  push:
+    branches: [main]
+    paths:
+      - "dialer/**"
+      - ".github/workflows/dialer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dialer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        with:
+          gradle-version: '8.13'
+      - name: Source privacy and dialer role policy
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = Path("dialer/app/src/main")
+          ns = "{http://schemas.android.com/apk/res/android}"
+          manifest = ET.parse(root / "AndroidManifest.xml").getroot()
+          permissions = {e.get(ns + "name") for e in manifest.findall("uses-permission")}
+          assert "android.permission.INTERNET" not in permissions
+          assert "android.permission.READ_SMS" not in permissions
+          assert "android.permission.WRITE_CALL_LOG" not in permissions
+          app = manifest.find("application")
+          assert app is not None and app.get(ns + "allowBackup") == "false"
+          assert app.get(ns + "dataExtractionRules") == "@xml/data_extraction_rules"
+          assert app.get(ns + "fullBackupContent") == "@xml/backup_rules"
+          service = app.find("service")
+          assert service is not None
+          assert service.get(ns + "permission") == "android.permission.BIND_INCALL_SERVICE"
+          assert service.get(ns + "exported") == "true"
+          receiver = app.find("receiver")
+          assert receiver is not None and receiver.get(ns + "exported") == "false"
+          for name in ("backup_rules.xml", "data_extraction_rules.xml"):
+              doc = ET.parse(root / "res/xml" / name).getroot()
+              expected = {("root", "."), ("device_root", "."), ("external", ".")}
+              sections = [doc] if name == "backup_rules.xml" else list(doc)
+              for section in sections:
+                  found = {(e.get("domain"), e.get("path")) for e in section.findall("exclude")}
+                  assert expected <= found, name
+          print("Dialer permissions, role binding and transfer exclusions verified in source.")
+          PY
+      - name: Kotlin tests, APK build, Android lint
+        working-directory: dialer
+        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon --stacktrace
+      - name: Verify packaged APK identity and permissions
+        run: |
+          set -euo pipefail
+          apk="dialer/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          aapt="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          badging="$("$aapt" dump badging "$apk")"
+          permissions="$("$aapt" dump permissions "$apk")"
+          grep -Fq "package: name='com.goreecloud.dialer'" <<< "$badging"
+          if grep -Fq "android.permission.INTERNET" <<< "$permissions"; then
+            echo "Unexpected Internet permission" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: success()
+        with:
+          name: goreecloud-dialer-debug-apk
+          path: dialer/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+          archive: true
