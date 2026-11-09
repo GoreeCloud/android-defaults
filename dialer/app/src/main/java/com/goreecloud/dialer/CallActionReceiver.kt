@@ -9,7 +9,8 @@ import android.telecom.VideoProfile
 /** Only explicit, non-exported notification actions reach this receiver. */
 class CallActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val call = CallSession.foreground() ?: return
+        // PendingIntent identity is bound to a per-call token; ignore stale actions.
+        val call = CallSession.callForToken(intent.getStringExtra(EXTRA_CALL_TOKEN)) ?: return
         when (intent.action) {
             ANSWER -> if (call.state == Call.STATE_RINGING) call.answer(VideoProfile.STATE_AUDIO_ONLY)
             DECLINE -> if (call.state == Call.STATE_RINGING) call.reject(false, null)
@@ -18,6 +19,7 @@ class CallActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val EXTRA_CALL_TOKEN = "com.goreecloud.dialer.extra.CALL_TOKEN"
         const val ANSWER = "com.goreecloud.dialer.action.ANSWER"
         const val DECLINE = "com.goreecloud.dialer.action.DECLINE"
         const val END = "com.goreecloud.dialer.action.END"

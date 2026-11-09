@@ -17,7 +17,6 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
-import android.telephony.PhoneNumberUtils
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateUtils
@@ -40,6 +39,7 @@ class DialerActivity : Activity() {
     private lateinit var root: LinearLayout
     private var screen = "keypad"
     private var enteredNumber = ""
+    private var openDtmfOnNextRender = false
     private var contacts: List<Contact>? = null
     private val refreshCalls: () -> Unit = {
         runOnUiThread {
@@ -88,6 +88,7 @@ class DialerActivity : Activity() {
     private fun readIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_CALL_SCREEN, false) == true) {
             screen = "call"
+            openDtmfOnNextRender = intent.getBooleanExtra(EXTRA_DTMF, false)
         } else if (intent?.action == Intent.ACTION_DIAL && intent.data?.scheme == "tel") {
             enteredNumber = intent.data?.schemeSpecificPart.orEmpty()
             screen = "keypad"
@@ -302,6 +303,10 @@ class DialerActivity : Activity() {
             })
         }
         body.addView(controlGrid.apply { topMargin(18) })
+        if (openDtmfOnNextRender && call.state != Call.STATE_RINGING) {
+            openDtmfOnNextRender = false
+            body.post { if (!isFinishing) showDtmf(call, body) }
+        }
         if (CallSession.all().size > 1) {
             val other = CallSession.all().firstOrNull { it !== call && it.state == Call.STATE_HOLDING }
             if (other != null) body.addView(action("Swap calls", R.color.surface_tonal, R.color.text_main) {
@@ -495,22 +500,13 @@ class DialerActivity : Activity() {
         }
         val uri = Uri.fromParts("tel", number, null)
         val telecom = getSystemService(TelecomManager::class.java)
-        if (PhoneNumberUtils.isEmergencyNumber(number)) {
-            // Never attempt direct emergency placement in this preview: use platform system dialer.
-            val systemPackage = if (Build.VERSION.SDK_INT >= 29) telecom.systemDialerPackage else null
-            val fallback = Intent(Intent.ACTION_DIAL, uri)
-            if (!systemPackage.isNullOrBlank() && systemPackage != packageName) {
-                fallback.setPackage(systemPackage)
-                try { startActivity(fallback); return } catch (_: Exception) { fallback.setPackage(null) }
-            }
-            try { startActivity(Intent.createChooser(fallback, "Use the system Phone app")) }
-            catch (_: Exception) { showError("Unable to open the system emergency dialer.") }
-            return
-        }
         if (!isDefaultPhone()) {
-            // Avoid looping into our own ACTION_DIAL handler without an explicit user choice.
-            try { startActivity(Intent.createChooser(Intent(Intent.ACTION_DIAL, uri), "Choose a phone app")) }
-            catch (_: Exception) { showError("No compatible phone app is available.") }
+            AlertDialog.Builder(this)
+                .setTitle("Default Phone app required")
+                .setMessage("Choose GoreeCloud Dialer as your default Phone app before calling. No call has been placed.")
+                .setPositiveButton("Choose Phone app") { _, _ -> requestPhoneRole() }
+                .setNegativeButton("Cancel", null)
+                .show()
             return
         }
         if (!allowed(Manifest.permission.CALL_PHONE)) {
@@ -518,6 +514,8 @@ class DialerActivity : Activity() {
             return
         }
         try {
+            // Official Android Telecom path includes platform emergency routing to the
+            // preloaded system dialer when appropriate, without app-side guessing.
             telecom.placeCall(uri, Bundle.EMPTY)
             screen = "call"
             render()
@@ -616,5 +614,6 @@ class DialerActivity : Activity() {
 
     companion object {
         const val EXTRA_CALL_SCREEN = "com.goreecloud.dialer.extra.CALL_SCREEN"
+        const val EXTRA_DTMF = "com.goreecloud.dialer.extra.DTMF"
     }
 }

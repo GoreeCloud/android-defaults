@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.telecom.CallAudioState
 import android.os.Build
 import android.telecom.Call
 import android.telecom.InCallService
@@ -39,6 +41,19 @@ class PhoneInCallService : InCallService() {
         super.onCallRemoved(call)
     }
 
+    override fun onCallAudioStateChanged(audioState: CallAudioState) {
+        super.onCallAudioStateChanged(audioState)
+        CallSession.changed()
+    }
+
+    override fun onBringToForeground(showDialpad: Boolean) {
+        super.onBringToForeground(showDialpad)
+        startActivity(Intent(this, DialerActivity::class.java)
+            .putExtra(DialerActivity.EXTRA_CALL_SCREEN, true)
+            .putExtra(DialerActivity.EXTRA_DTMF, showDialpad)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    }
+
     override fun onDestroy() {
         notifications.cancel(NOTIFICATION_ID)
         CallSession.unbind(this)
@@ -52,6 +67,7 @@ class PhoneInCallService : InCallService() {
             return
         }
         val ringing = call.state == Call.STATE_RINGING
+        val token = CallSession.token(call) ?: return
         val open = PendingIntent.getActivity(
             this, 0,
             Intent(this, DialerActivity::class.java)
@@ -77,12 +93,12 @@ class PhoneInCallService : InCallService() {
         if (ringing) {
             builder.addAction(
                 Notification.Action.Builder(
-                    null, "Decline", actionIntent(CallActionReceiver.DECLINE, 11)
+                    null, "Decline", actionIntent(CallActionReceiver.DECLINE, 11, token)
                 ).build()
             )
             builder.addAction(
                 Notification.Action.Builder(
-                    null, "Answer", actionIntent(CallActionReceiver.ANSWER, 12)
+                    null, "Answer", actionIntent(CallActionReceiver.ANSWER, 12, token)
                 ).build()
             )
             // On Android 14+ the user/system can deny full-screen notification access.
@@ -91,17 +107,21 @@ class PhoneInCallService : InCallService() {
         } else {
             builder.addAction(
                 Notification.Action.Builder(
-                    null, "End call", actionIntent(CallActionReceiver.END, 13)
+                    null, "End call", actionIntent(CallActionReceiver.END, 13, token)
                 ).build()
             )
         }
         notifications.notify(NOTIFICATION_ID, builder.build())
     }
 
-    private fun actionIntent(action: String, code: Int): PendingIntent =
+    private fun actionIntent(action: String, code: Int, token: String): PendingIntent =
         PendingIntent.getBroadcast(
             this, code,
-            Intent(this, CallActionReceiver::class.java).setAction(action),
+            Intent(this, CallActionReceiver::class.java)
+                .setAction(action)
+                // Intent extras do not participate in PendingIntent identity; data does.
+                .setData(Uri.parse("goreecloud-dialer://call-action/$token/$code"))
+                .putExtra(CallActionReceiver.EXTRA_CALL_TOKEN, token),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
