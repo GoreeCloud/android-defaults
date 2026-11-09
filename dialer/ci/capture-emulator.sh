@@ -29,7 +29,10 @@ adb pull /sdcard/Android/data/com.goreecloud.dialer/files/screenshots "$screens/
 adb install -r "$repo_root/dialer/app/build/outputs/apk/debug/app-debug.apk"
 
 launch() {
-  adb shell am start -n com.goreecloud.dialer/.DialerActivity >/dev/null
+  # CI navigation tests may leave a restorable Contacts/Settings task behind.
+  # CLEAR_TASK | NEW_TASK resets *only this disposable emulator's task*, so
+  # screenshot validation reliably starts from the dialer keypad.
+  adb shell am start -S -f 0x10008000 -n com.goreecloud.dialer/.DialerActivity >/dev/null
 }
 
 ensure_rendered_keypad() {
