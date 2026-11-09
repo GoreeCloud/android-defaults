@@ -1,0 +1,41 @@
+# GoreeCloud Contacts — Android
+
+A separate native Kotlin Android application in the GoreeCloud Android Defaults monorepo.
+
+**Maturity: 0.1.0 development preview, not a certified replacement for the device's contacts application.** Android-only, independent from the Dialer. Minimum API 26; compile and target SDK 35.
+
+## Current source implementation
+
+- On-device Android Contacts Provider read with explicit READ_CONTACTS runtime consent. No contact data upload.
+- Search names, numbers, emails and organizations; alphabetized directory; app-local favorites; Android groups and membership filtering.
+- Profile cards with phone/email/organization, and add/edit through Android system contact intents.
+- Call via ACTION_DIAL, compose SMS/email via installed apps, share only after preview and explicit confirmation.
+- Read-only duplicate suggestions by normalized phone/email.
+- User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
+- Offline-only design with no INTERNET, WRITE_CONTACTS, call or SMS permission; no telemetry or server.
+- Floating bottom navigation, responsive native UI and semantic light/dark surfaces.
+
+**Not implemented:** Android system STARRED updates, direct bulk contact changes, group edits, delete/Trash, rich field round-trips, contact photos, QR exchange, SIM transfers, imports, self-hosted sync, backups, default-handler replacement, device/release acceptance.
+
+## Build
+
+Uses JDK 17, Gradle 8.13, Android Gradle Plugin 8.13.2, Kotlin 2.3.21, Android SDK 35.
+
+From this directory:
+
+    gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+
+Debug output: contacts/app/build/outputs/apk/debug/app-debug.apk.
+
+The debug APK is not a signed release or device-accepted installation. CI checks build, unit tests, lint, APK permissions and disposable emulator launch.
+
+## Privacy, Android compatibility and remaining gates
+
+READ_CONTACTS must be granted before listing contacts. Favorite lookup keys are private and excluded from Android backup/transfer. Exports are made only after choosing a document destination; shares only after confirmation and recipient selection. Once exported or shared, recipient storage and policies apply. There is no hidden sync.
+
+Android's October 2026 guidance favors user-confirmed system contact intents instead of future-restricted WRITE_CONTACTS:
+https://developer.android.com/blog/posts/reliable-way-to-add-and-edit-contacts-android
+
+Remaining gates: OEM provider behavior (revocation, cancellation, unavailable rows, large collections), full vCard interoperability, synthetic stress tests, API 26/35/36 physical or emulator acceptance, TalkBack, large text, RTL, tablets, night mode and GC UI screenshot audit. Network sync requires separately verified Identity, GoreeShield, Wardveil and Mesh contracts.
+
+See [feature status](docs/FEATURES.md).

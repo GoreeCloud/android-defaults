@@ -1,0 +1,133 @@
+name: Android Contacts CI
+on:
+  pull_request:
+    paths:
+      - "contacts/**"
+      - ".github/workflows/contacts.yml"
+      - "README.md"
+      - "LICENSE"
+  push:
+    branches: [main]
+    paths:
+      - "contacts/**"
+      - ".github/workflows/contacts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        with:
+          gradle-version: "8.13"
+      - name: GoreeShield and Wardveil privacy and integrity checks
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          import re
+          src = Path("contacts/app/src/main")
+          ns = "{http://schemas.android.com/apk/res/android}"
+          manifest = ET.parse(src / "AndroidManifest.xml").getroot()
+          perms = [p.get(ns + "name") for p in manifest.findall("uses-permission")]
+          assert perms == ["android.permission.READ_CONTACTS"], perms
+          app = manifest.find("application")
+          assert app is not None
+          assert app.get(ns + "allowBackup") == "false"
+          assert app.get(ns + "usesCleartextTraffic") == "false"
+          assert app.get(ns + "fullBackupContent") == "@xml/backup_rules"
+          assert app.get(ns + "dataExtractionRules") == "@xml/data_extraction_rules"
+          activities = app.findall("activity")
+          assert len(activities) == 1
+          assert activities[0].get(ns + "exported") == "true"
+          assert not app.findall("service") and not app.findall("provider")
+          for file in ("backup_rules.xml", "data_extraction_rules.xml"):
+              doc = ET.parse(src / "res/xml" / file).getroot()
+              for section in ([doc] if file == "backup_rules.xml" else list(doc)):
+                  found = {(e.get("domain"), e.get("path")) for e in section.findall("exclude")}
+                  assert {("root","."), ("device_root","."), ("external",".")} <= found
+          code = "\n".join(p.read_text() for p in (src / "java").rglob("*.kt"))
+          assert "Intent.ACTION_INSERT" in code and "Intent.ACTION_EDIT" in code
+          assert "Manifest.permission.READ_CONTACTS" in code
+          for banned in ("applyBatch(", "contentResolver.delete(", "contentResolver.insert(", "WRITE_CONTACTS"):
+              assert banned not in code, banned
+          workflow = Path(".github/workflows/contacts.yml").read_text()
+          uses = re.findall(r"^\s*- uses:\s*(\S+)", workflow, re.M)
+          pins = {
+              "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "actions/setup-java": "b843ebf9b913146b38da2eaa7aeddf76074ae1ad",
+              "gradle/actions/setup-gradle": "8da46b539cd8fe6ab27ca75128919a18d757604c",
+              "actions/upload-artifact": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "ReactiveCircus/android-emulator-runner": "a421e43855164a8197daf9d8d40fe71c6996bb0d",
+          }
+          for use in uses:
+              name, sha = use.rsplit("@", 1)
+              assert pins.get(name) == sha and len(sha) == 40, use
+          assert len(uses) == 8
+          print("Android Contacts source privacy, backup and workflow action pin policies passed")
+          PY
+      - name: JVM tests, APK assembly, Android Lint
+        working-directory: contacts
+        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon --stacktrace
+      - name: Verify packaged app and permissions
+        run: |
+          set -euo pipefail
+          apk="contacts/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          badging="$("$aapt" dump badging "$apk")"
+          perms="$("$aapt" dump permissions "$apk")"
+          grep -Fq "package: name='com.goreecloud.contacts'" <<< "$badging"
+          grep -Fq "android.permission.READ_CONTACTS" <<< "$perms"
+          for forbidden in android.permission.INTERNET android.permission.WRITE_CONTACTS android.permission.CALL_PHONE android.permission.SEND_SMS; do
+            if grep -Fq "$forbidden" <<< "$perms"; then
+              echo "Unexpected permission: $forbidden" >&2
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: success()
+        with:
+          name: goreecloud-contacts-debug-apk
+          path: contacts/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  emulator-smoke:
+    needs: contacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        with:
+          gradle-version: "8.13"
+      - name: Enable KVM on disposable CI runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android 35 emulator smoke
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          script: gradle -p contacts :app:connectedDebugAndroidTest --no-daemon --stacktrace
