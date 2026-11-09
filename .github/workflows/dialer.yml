@@ -50,7 +50,7 @@ jobs:
               "actions/checkout": 2,
               "actions/setup-java": 2,
               "gradle/actions/setup-gradle": 2,
-              "actions/upload-artifact": 1,
+              "actions/upload-artifact": 2,
               "ReactiveCircus/android-emulator-runner": 1,
           })
           actual = Counter()
@@ -153,4 +153,16 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          script: cd dialer && gradle :app:connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            cd dialer
+            gradle :app:connectedDebugAndroidTest --no-daemon --stacktrace
+            mkdir -p build/emulator-screenshots
+            adb pull /sdcard/Android/data/com.goreecloud.dialer/files/screenshots \
+              build/emulator-screenshots/android-${{ matrix.api }} || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: success()
+        with:
+          name: goreecloud-dialer-android-${{ matrix.api }}-screens
+          path: dialer/build/emulator-screenshots/android-${{ matrix.api }}/screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 7

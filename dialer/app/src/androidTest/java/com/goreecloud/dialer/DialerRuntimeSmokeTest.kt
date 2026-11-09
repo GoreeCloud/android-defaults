@@ -3,6 +3,9 @@ package com.goreecloud.dialer
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import java.io.File
+import java.io.FileOutputStream
 import android.net.Uri
 import android.view.View
 import android.view.ViewGroup
@@ -101,6 +104,39 @@ class DialerRuntimeSmokeTest {
             assertFalse(store.contains(testContactId))
         } finally {
             store.remove(testContactId)
+        }
+    }
+
+    @Test fun captureOfflineEmptyStateScreensForReview() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val scenario = ActivityScenario.launch(DialerActivity::class.java)
+        try {
+            val pages = listOf("keypad", "recents", "contacts", "settings")
+            for (page in pages) {
+                scenario.onActivity { activity ->
+                    if (page != "keypad") {
+                        val root = activity.window.decorView
+                        val target = page.replaceFirstChar { it.uppercase() }
+                        button(root, target).performClick()
+                    }
+                }
+                instrumentation.waitForIdleSync()
+                // A blank image on some accelerated emulators is not a
+                // telephony test failure. CI records only available evidence.
+                val bitmap: Bitmap? = instrumentation.uiAutomation.takeScreenshot()
+                if (bitmap != null) {
+                    val context = instrumentation.targetContext
+                    val folder = context.getExternalFilesDir("screenshots")
+                        ?: continue
+                    folder.mkdirs()
+                    FileOutputStream(File(folder, "$page.png")).use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    bitmap.recycle()
+                }
+            }
+        } finally {
+            scenario.close()
         }
     }
 

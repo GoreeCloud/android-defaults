@@ -23,6 +23,22 @@ gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 
 The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a development build, **not** a standalone APK delivered through GoreeCloud/Artifacts or a phone-tested release. The repository's GitHub Actions workflow validates source policy, JVM tests, assembly, lint and packaged APK privacy policy. Separate disposable Android 26 and 35 emulator jobs exercise installed UI navigation, dial intents and requested permissions; these are not carrier-call acceptance. CI archives are not standalone signed-delivery confirmation.
 
+
+
+### Incremental development features
+
+- **Favorites**: Mark or unmark contacts from the Contacts screen. Only numeric
+  Android contact IDs are retained in app-private `SharedPreferences`; no copied
+  phone numbers or names are stored for Favorites. You can clear the selection
+  in Settings, and revoking Contacts permission prevents reading contact details.
+- **Audio routes**: Android 14+ now uses platform-provided `CallEndpoint` choices
+  and `requestCallEndpointChange()` with a failure callback. Android 8–13 uses
+  its supported legacy audio-routing APIs. Physical Bluetooth/earpiece switching
+  has not yet been validated.
+- **Screenshot evidence**: Android emulator smoke tests may produce local-only
+  blank-state screenshots for UI review. These are CI evidence, not user photos,
+  phone data, product release files, or proof of visual acceptance.
+
 ## Device use and safety
 
 Install on a **non-primary test phone** with a working carrier account. Launch; choose **Make default phone app** in Settings, then grant necessary permissions. The platform controls carrier, SIM selection and emergency routing. If the default Phone role has not been granted, the app prompts you to select it and **does not place a call**. When this app is the default, an explicit tap on **Call** uses `TelecomManager.placeCall()` for ordinary and emergency numbers. Android is responsible for emergency routing to the preinstalled system dialer, as documented by [Android's default-dialer guidance](https://developer.android.com/develop/connectivity/telecom/dialer-app).
