@@ -845,7 +845,11 @@ class DialerActivity : Activity() {
                         contactsFailed = failed
                     }
                     contactsLoading = false
-                    if (screen == "contacts" || screen == "keypad" || screen == "call") render()
+                    // Do not tear down a focused number editor while the user
+                    // is typing: the next edit refreshes the suggestion list.
+                    val typingNumber = screen == "keypad" && currentFocus is EditText
+                    if ((screen == "contacts" || screen == "keypad" || screen == "call") &&
+                        !typingNumber) render()
                 }
             }
         }
