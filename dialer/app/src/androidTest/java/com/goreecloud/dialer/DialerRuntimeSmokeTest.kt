@@ -84,4 +84,24 @@ class DialerRuntimeSmokeTest {
         assertFalse(requested.contains(Manifest.permission.WRITE_CALL_LOG))
         assertFalse(requested.contains(Manifest.permission.READ_SMS))
     }
+    @Test fun favoritesAreLocalReversibleAndNotRawPhoneNumbers() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = FavoritesStore(app)
+        val testContactId = Long.MAX_VALUE - 7L
+        store.remove(testContactId)
+        try {
+            assertFalse(store.contains(testContactId))
+            assertTrue(store.toggle(testContactId))
+            assertTrue(store.contains(testContactId))
+            assertFalse(store.all().any { "555" in it || "+" in it })
+            assertFalse(store.toggle(testContactId))
+            assertFalse(store.contains(testContactId))
+            assertTrue(store.toggle(testContactId))
+            store.remove(testContactId)
+            assertFalse(store.contains(testContactId))
+        } finally {
+            store.remove(testContactId)
+        }
+    }
+
 }

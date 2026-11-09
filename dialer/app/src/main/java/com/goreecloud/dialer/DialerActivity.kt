@@ -41,6 +41,8 @@ class DialerActivity : Activity() {
     private var screen = "keypad"
     private var enteredNumber = ""
     private var contactFilter = ""
+    private var favoritesOnly = false
+    private val favorites by lazy { FavoritesStore(applicationContext) }
     private var recentSearch = ""
     private var recentFilter = "All"
     private var openDtmfOnNextRender = false
@@ -52,7 +54,7 @@ class DialerActivity : Activity() {
         }
     }
 
-    private data class Contact(val name: String, val number: String)
+    private data class Contact(val name: String, val number: String, val id: Long)
     private data class Recent(val number: String, val type: Int, val whenMs: Long,
         val seconds: Long, val presentation: Int) {
         fun visibleNumber(): String =
@@ -204,9 +206,12 @@ class DialerActivity : Activity() {
             suggestions.removeAllViews()
             if (enteredNumber.filter { it.isDigit() }.length < 2) return
             if (!allowed(Manifest.permission.READ_CONTACTS)) return
+            val saved = favorites.all()
             val found = queryContacts()
+                .asSequence()
                 .filter { PhoneMatcher.matches(enteredNumber, it.name, it.number) }
-                .take(3)
+                .sortedByDescending { it.id.toString() in saved }
+                .take(3).toList()
             found.forEach { contact ->
                 suggestions.addView(action("${contact.name} · ${contact.number}", R.color.surface_tonal, R.color.text_main) {
                     enteredNumber = contact.number
@@ -529,6 +534,14 @@ class DialerActivity : Activity() {
             return
         }
         val all = queryContacts()
+        val filterRow = twoActions(
+            "All contacts" to { favoritesOnly = false; render() },
+            "Favorites" to { favoritesOnly = true; render() }
+        )
+        filterRow.getChildAt(if (favoritesOnly) 1 else 0).isSelected = true
+        filterRow.getChildAt(if (favoritesOnly) 1 else 0).contentDescription =
+            (if (favoritesOnly) "Favorites" else "All contacts") + ", selected"
+        body.addView(filterRow)
         val search = EditText(this).apply {
             hint = "Search contacts by name or number"
             contentDescription = "Search contacts"
@@ -544,13 +557,18 @@ class DialerActivity : Activity() {
         fun fillResults() {
             results.removeAllViews()
             val term = contactFilter.trim()
-            val found = all.asSequence().filter { entry ->
-                term.isEmpty() || entry.name.contains(term, ignoreCase = true) ||
-                    entry.number.contains(term, ignoreCase = true) ||
-                    (term.all(Char::isDigit) && PhoneMatcher.matches(term, entry.name, entry.number))
-            }.take(70).toList()
+            val saved = favorites.all()
+            val found = all.asSequence()
+                .filter { !favoritesOnly || it.id.toString() in saved }
+                .filter { entry ->
+                    term.isEmpty() || entry.name.contains(term, ignoreCase = true) ||
+                        entry.number.contains(term, ignoreCase = true) ||
+                        (term.all(Char::isDigit) && PhoneMatcher.matches(term, entry.name, entry.number))
+                }.sortedByDescending { it.id.toString() in saved }
+                .take(70).toList()
             if (found.isEmpty()) {
-                results.addView(label("No matching phone contacts.", 15f, R.color.text_soft))
+                results.addView(label(if (favoritesOnly) "No matching favorites. Add a favorite from All contacts."
+                    else "No matching phone contacts.", 15f, R.color.text_soft))
             }
             found.forEach { entry ->
                 val card = column(8).apply { background = rounded(R.color.surface, 18) }
@@ -560,6 +578,15 @@ class DialerActivity : Activity() {
                     enteredNumber = entry.number
                     placeCall()
                 }, "Message" to { openSms(entry.number) }))
+                val selected = entry.id.toString() in saved
+                card.addView(action(if (selected) "Remove favorite" else "Add favorite",
+                    R.color.surface_tonal, R.color.text_main) {
+                    favorites.toggle(entry.id)
+                    fillResults()
+                }.apply {
+                    contentDescription = (if (selected) "Remove " else "Add ") +
+                        entry.name + (if (selected) " from favorites" else " to favorites")
+                })
                 results.addView(card)
             }
             if (term.isEmpty() && all.size > 70)
@@ -592,6 +619,19 @@ class DialerActivity : Activity() {
         body.addView(status)
         body.addView(label("Optional local permissions", 20f, R.color.text_main, true).apply { topMargin(15) })
         permissionCard(body, "Contacts • offline T9 search and contact dialing", Manifest.permission.READ_CONTACTS, 201)
+        val savedFavorites = favorites.all().size
+        body.addView(action("Clear local favorites ($savedFavorites)",
+            R.color.surface_tonal, R.color.text_main) {
+            AlertDialog.Builder(this)
+                .setTitle("Clear saved favorites?")
+                .setMessage("This only removes GoreeCloud Dialer's local favorite selections. Contacts stay unchanged.")
+                .setPositiveButton("Clear") { _, _ ->
+                    favorites.clear()
+                    render()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }.apply { isEnabled = savedFavorites > 0 })
         permissionCard(body, "Call history • device recents", Manifest.permission.READ_CALL_LOG, 202)
         if (Build.VERSION.SDK_INT >= 33) {
             permissionCard(body, "Notifications • incoming and ongoing call controls", Manifest.permission.POST_NOTIFICATIONS, 203)
@@ -626,8 +666,12 @@ class DialerActivity : Activity() {
             btn.contentDescription = "$name tab" + if (selected) ", selected" else ""
             dock.addView(btn, LinearLayout.LayoutParams(0, dp(56), 1f))
         }
-        val holder = LinearLayout(this).apply { setPadding(dp(14), dp(8), dp(14), dp(12)) }
-        holder.addView(dock, LinearLayout.LayoutParams(-1, -2))
+        val holder = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(14), dp(8), dp(14), dp(12))
+        }
+        val width = minOf(dp(560), resources.displayMetrics.widthPixels - dp(28))
+        holder.addView(dock, LinearLayout.LayoutParams(width.coerceAtLeast(dp(200)), -2))
         root.addView(holder)
     }
 
@@ -650,12 +694,15 @@ class DialerActivity : Activity() {
             contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    ContactsContract.CommonDataKinds.Phone.NUMBER),
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
                 null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             )?.use { cursor ->
                 while (cursor.moveToNext() && list.size < 1500) {
                     val number = cursor.getString(1).orEmpty()
-                    if (number.isNotBlank()) list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number))
+                    val id = cursor.getLong(2)
+                    if (number.isNotBlank() && id > 0L)
+                        list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number, id))
                 }
             }
         } catch (_: SecurityException) {
