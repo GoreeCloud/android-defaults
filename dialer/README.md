@@ -7,7 +7,7 @@ An independently buildable **native Kotlin Android** phone app in the `GoreeClou
 - Android `ACTION_DIAL` handler, keypad with long-press +, backspace/long-press clear, strict number validation, Telecom calling, and request to become default Phone app through `ROLE_DIALER`.
 - `InCallService` integration, Android 12+ native `CallStyle` notifications (legacy notifications on Android 8–11), call-specific notification action tokens, Android Telecom foreground requests, answer/reject/end, mute, supported audio-output routes, hold/resume, and DTMF.
 - Optional, on-device contacts and T9/number search, contact-provider creation hand-off, contact calling/SMS, and local recent-call number search with All/Missed/Incoming/Outgoing/Declined filters (last 150 accessible records).
-- Contacts and Call Log provider queries use a serial background executor, loading/error states, permission rechecks and request-generation guards to prevent stale Activity callbacks. No raw provider results are written to persistent app storage.
+- Contacts and Call Log provider queries use a serial background executor, cancellation signals, loading/error states, permission rechecks and request-generation guards to prevent stale Activity callbacks. No raw provider results are written to persistent app storage.
 - Telecom/CallLog presentation flags are respected for private/withheld caller IDs. No caller number or contact name is included in call notifications.
 - Light/dark app-local GoreeCloud UI semantic mappings, touch-friendly native controls, labels, and in-call state handling.
 - GoreeShield: no Internet or trackers, no recording, no background contact uploads, opt-in runtime access to contacts/call history, cloud/transfer backup exclusion.
@@ -41,6 +41,17 @@ The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a dev
   carrier features, and those actions still require real dual-call tests.
 - **In-call keypad**: rapid DTMF key taps no longer schedule overlapping tone
   stop callbacks; dismissal always stops any in-progress tone.
+- **Activity state**: In-progress dial strings and search/tab selections survive
+  Android activity recreation using Android-managed instance state, not app-local
+  persistent preferences or network access. Dial strings are cleared after the
+  app successfully requests a new outgoing call.
+- **Contact and permission handoffs**: View a contact's details using Android's
+  contacts provider; open Android's app-permissions page from Dialer Settings.
+  Neither action grants new privileges to GoreeCloud Dialer.
+- **Local data reset**: Settings includes an explicit, confirmed clear action
+  for saved Favorites IDs, dial-pad drafts, search filters and in-process
+  Contacts/Call Log caches. It does not modify Android contacts, carrier call
+  records, SIM configuration, or operating-system permissions.
 - **Screenshot evidence**: Android emulator smoke tests may produce local-only
   blank-state screenshots for UI review. These are CI evidence, not user photos,
   phone data, product release files, or proof of visual acceptance.

@@ -40,7 +40,8 @@ to public issues, CI logs or screenshot artifacts.
 ## Further engineering risks
 
 - Contact and call-log provider reads are now serialized on a background
-  executor with bounded cursor scans and request-generation cancellation guards.
+  executor with bounded cursor scans, actual Android provider cancellation signals
+  and request-generation guards.
   **Performance acceptance is still open**: the current emulator suite does not
   inject slow/malformed providers or large data sets, and device jank has not
   been measured. Query caches are in-memory and invalidated on Activity resume.

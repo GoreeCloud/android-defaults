@@ -52,6 +52,7 @@ class DialerRuntimeSmokeTest {
                 assertTrue(textExists(root, "Call history is only read"))
                 button(root, "Settings").performClick()
                 assertTrue(textExists(root, "Phone app"))
+                button(root, "Manage Android app permissions")
                 button(root, "Keypad").performClick()
                 assertTrue(textExists(root, "Call a number"))
             }
@@ -138,6 +139,56 @@ class DialerRuntimeSmokeTest {
         } finally {
             scenario.close()
         }
+    }
+
+    @Test fun activityRecreationRetainsDraftAndSelectedPage() {
+        val scenario = ActivityScenario.launch(DialerActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                val keypad = descendants(activity.window.decorView)
+                    .filterIsInstance<EditText>().first()
+                keypad.setText("+1 (202) 555-0132")
+                assertEquals("+1 (202) 555-0132", keypad.text.toString())
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                val restored = descendants(activity.window.decorView)
+                    .filterIsInstance<EditText>().first()
+                assertEquals("+1 (202) 555-0132", restored.text.toString())
+                button(activity.window.decorView, "Contacts").performClick()
+                assertTrue(textExists(activity.window.decorView, "Contacts"))
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                assertTrue(textExists(activity.window.decorView, "Contacts stay on your device"))
+                button(activity.window.decorView, "Keypad").performClick()
+                val restored = descendants(activity.window.decorView)
+                    .filterIsInstance<EditText>().first()
+                assertEquals("+1 (202) 555-0132", restored.text.toString())
+            }
+        } finally { scenario.close() }
+    }
+
+    @Test fun rotationDoesNotReapplyOriginalTelIntentOverDraft() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:5550100")).apply {
+            setClass(context, DialerActivity::class.java)
+        }
+        val scenario = ActivityScenario.launch<DialerActivity>(intent)
+        try {
+            scenario.onActivity { activity ->
+                val keypad = descendants(activity.window.decorView)
+                    .filterIsInstance<EditText>().first()
+                assertEquals("5550100", keypad.text.toString())
+                keypad.setText("5550199")
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                val keypad = descendants(activity.window.decorView)
+                    .filterIsInstance<EditText>().first()
+                assertEquals("5550199", keypad.text.toString())
+            }
+        } finally { scenario.close() }
     }
 
 }
