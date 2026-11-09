@@ -24,6 +24,7 @@ import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
@@ -118,6 +119,15 @@ class DialerActivity : Activity() {
 
     private fun render() {
         if (!::root.isInitialized) return
+        // Only ringing calls are eligible to appear above the lock screen.
+        val showIncoming = screen == "call" && CallSession.foreground()?.state == Call.STATE_RINGING
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(showIncoming)
+            setTurnScreenOn(showIncoming)
+        } else {
+            val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            if (showIncoming) window.addFlags(flags) else window.clearFlags(flags)
+        }
         root.removeAllViews()
         val header = column(20).apply {
             setPadding(dp(22), dp(20), dp(22), dp(14))
@@ -304,12 +314,28 @@ class DialerActivity : Activity() {
     }
 
     private fun showDtmf(call: Call, body: LinearLayout) {
-        AlertDialog.Builder(this).setTitle("In-call keypad")
-            .setItems(arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")) { _, index ->
-                val digit = "123456789*0#"[index]
-                call.playDtmfTone(digit)
-                android.os.Handler(mainLooper).postDelayed({ call.stopDtmfTone() }, 180L)
-            }.setNegativeButton("Close", null).show()
+        val pad = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(12), dp(10), dp(10))
+        }
+        listOf("123", "456", "789", "*0#").forEach { line ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            line.forEach { digit ->
+                val key = action(digit.toString(), R.color.surface_tonal, R.color.text_main) {
+                    call.playDtmfTone(digit)
+                    android.os.Handler(mainLooper).postDelayed({ call.stopDtmfTone() }, 200L)
+                }
+                row.addView(key, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
+                    setMargins(dp(3), dp(3), dp(3), dp(3))
+                })
+            }
+            pad.addView(row)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("In-call keypad")
+            .setView(pad)
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun renderRecents(body: LinearLayout) {
