@@ -35,7 +35,8 @@ launch() {
 ensure_rendered_keypad() {
   for _ in {1..8}; do
     adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-    if adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq 'Call a number'; then
+    if adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq 'Call a number' &&
+       adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq 'Place phone call'; then
       sleep 1
       return 0
     fi

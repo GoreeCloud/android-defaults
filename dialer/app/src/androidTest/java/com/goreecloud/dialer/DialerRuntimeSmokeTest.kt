@@ -45,6 +45,7 @@ class DialerRuntimeSmokeTest {
             scenario.onActivity { activity ->
                 val root = activity.window.decorView
                 assertTrue(textExists(root, "Call a number"))
+                assertTrue(button(root, "Call").isShown)
                 assertTrue(textExists(root, "Private by default"))
                 button(root, "Contacts").performClick()
                 assertTrue(textExists(root, "Contacts stay on your device"))
