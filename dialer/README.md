@@ -4,9 +4,9 @@ An independently buildable **native Kotlin Android** phone app in the `GoreeClou
 
 ## Scope implemented in source
 
-- Android `ACTION_DIAL` handler, keypad with long-press +, number validation, system telephony hand-off, and request to become default Phone app through `ROLE_DIALER`.
-- `InCallService` integration, privacy-conscious incoming/ongoing call notification, full-screen incoming activity where the OS permits it, answer/reject/end, mute, speaker, hold/resume, and DTMF.
-- Optional, on-device contact discovery with T9 name/number matching, contact dialing and SMS hand-off; optional last 100 call-history entries.
+- Android `ACTION_DIAL` handler, keypad with long-press +, backspace/long-press clear, strict number validation, Telecom calling, and request to become default Phone app through `ROLE_DIALER`.
+- `InCallService` integration, incoming/ongoing call notifications, call-specific notification action tokens, Android Telecom foreground requests, answer/reject/end, mute, supported audio-output route selector, hold/resume, and DTMF.
+- Optional, on-device contacts and T9/number search, contact-provider creation hand-off, contact calling/SMS, and local recent-call number search with All/Missed/Incoming/Outgoing/Declined filters (last 150 accessible records).
 - Light/dark app-local GoreeCloud UI semantic mappings, touch-friendly native controls, labels, and in-call state handling.
 - GoreeShield: no Internet or trackers, no recording, no background contact uploads, opt-in runtime access to contacts/call history, cloud/transfer backup exclusion.
 - Wardveil: signature/system-bound `BIND_INCALL_SERVICE`, non-exported notification receiver, input normalization, and no direct user-data network egress.
@@ -20,11 +20,11 @@ cd dialer
 gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
-The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a development build, **not** a standalone APK delivered through GoreeCloud/Artifacts or a phone-tested release. The repository's GitHub Actions workflow validates source policy, tests, assembly and lint. CI archives are not standalone signed-delivery confirmation.
+The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a development build, **not** a standalone APK delivered through GoreeCloud/Artifacts or a phone-tested release. The repository's GitHub Actions workflow validates source policy, JVM tests, assembly, lint and packaged APK privacy policy. Separate disposable Android 26 and 35 emulator jobs exercise installed UI navigation, dial intents and requested permissions; these are not carrier-call acceptance. CI archives are not standalone signed-delivery confirmation.
 
 ## Device use and safety
 
-Install on a **non-primary test phone** with a working carrier account. Launch; choose **Make default phone app** in Settings, then grant necessary permissions. The platform controls carrier, SIM selection and emergency routing. If denied default Phone role, the keypad falls back to the operating system dialer via `ACTION_DIAL`. Emergency-looking numbers are *never* placed automatically by this app; the system dial UI handles confirmation and routing.
+Install on a **non-primary test phone** with a working carrier account. Launch; choose **Make default phone app** in Settings, then grant necessary permissions. The platform controls carrier, SIM selection and emergency routing. If the default Phone role has not been granted, the app prompts you to select it and **does not place a call**. When this app is the default, an explicit tap on **Call** uses `TelecomManager.placeCall()` for ordinary and emergency numbers. Android is responsible for emergency routing to the preinstalled system dialer, as documented by [Android's default-dialer guidance](https://developer.android.com/develop/connectivity/telecom/dialer-app).
 
 Do **not** use this preview as your sole trusted emergency dialer. Test with provider-approved non-emergency numbers and revert in Android Settings → Default apps → Phone app. Do not place test calls to emergency services.
 
@@ -35,11 +35,11 @@ The broader product proposal includes call screening, on-device spam defenses, A
 ## Verification gates before release
 
 1. CI unit tests, lint, APK metadata and manifest/permissions inspection.
-2. Disposable Android emulator functional tests: role request, contact-permission denial, in-call service controls and notification behavior.
+2. Disposable Android 26/35 emulator smoke tests: keypad/navigation, populated `tel:` intent, permission gating and packaged permission checks. Actual Telecom call lifecycle and notification interactions are not yet exercised.
 3. Representative physical devices: dual SIM, carrier calls, DTMF, Bluetooth, locked-screen notifications and OEM battery management.
 4. Privacy, accessibility, emergency-call preservation and platform policy review; inspect UI screenshots against GoreeCloud UI.
 5. Record verified signing/provenance/checksum; deliver standalone signed APK in authorized `GoreeCloud/Artifacts/` if an APK delivery is requested.
 
 ### Architecture
 
-`DialerActivity` displays navigation and operating-system data. `PhoneInCallService` is bound by Android Telecom. `CallSession` manages only in-process live calls and publishes UI updates. `CallActionReceiver` handles explicit app-internal notification actions. `PhoneMatcher` provides offline number/T9 matching. No server, identity account, Mesh synchronization, or Wardveil cloud feed is active.
+`DialerActivity` displays navigation and operating-system data. `PhoneInCallService` is bound by Android Telecom. `CallSession` manages only in-process live calls and publishes UI updates. `CallActionReceiver` handles explicit app-internal notification actions only for their originating live call, rejecting stale actions. `PhoneMatcher` provides offline number/T9 matching. No server, identity account, Mesh synchronization, or Wardveil cloud feed is active.
