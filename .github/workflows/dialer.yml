@@ -163,6 +163,6 @@ jobs:
         if: success()
         with:
           name: goreecloud-dialer-android-${{ matrix.api }}-screens
-          path: dialer/build/emulator-screenshots/android-${{ matrix.api }}/screenshots/*.png
+          path: dialer/build/emulator-screenshots/**/*.png
           if-no-files-found: warn
           retention-days: 7

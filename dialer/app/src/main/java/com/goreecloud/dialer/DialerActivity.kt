@@ -562,14 +562,21 @@ class DialerActivity : Activity() {
             return
         }
         val all = queryContacts()
-        val filterRow = twoActions(
-            "All contacts" to { favoritesOnly = false; render() },
-            "Favorites" to { favoritesOnly = true; render() }
-        )
-        filterRow.getChildAt(if (favoritesOnly) 1 else 0).isSelected = true
-        filterRow.getChildAt(if (favoritesOnly) 1 else 0).contentDescription =
-            (if (favoritesOnly) "Favorites" else "All contacts") + ", selected"
+        val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf(false to "All contacts", true to "Favorites").forEach { (onlySaved, title) ->
+            val selected = favoritesOnly == onlySaved
+            val chip = action(title, if (selected) R.color.brand else R.color.surface_tonal,
+                if (selected) R.color.on_brand else R.color.text_main) {
+                favoritesOnly = onlySaved
+                render()
+            }.apply {
+                isSelected = selected
+                contentDescription = title + if (selected) ", selected" else ""
+            }
+            filterRow.addView(chip, LinearLayout.LayoutParams(0, dp(56), 1f))
+        }
         body.addView(filterRow)
+        body.addView(label("Favorites are saved only on this device.", 13f, R.color.text_soft))
         val search = EditText(this).apply {
             hint = "Search contacts by name or number"
             contentDescription = "Search contacts"
