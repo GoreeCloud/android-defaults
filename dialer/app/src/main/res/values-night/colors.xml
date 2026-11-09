@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="canvas">#0C1322</color>
+    <color name="surface">#172137</color>
+    <color name="surface_tonal">#263550</color>
+    <color name="brand">#A7BEFF</color>
+    <color name="on_brand">#111D35</color>
+    <color name="text_main">#F6F8FE</color>
+    <color name="text_soft">#B6C4DE</color>
+    <color name="outline">#40506A</color>
+    <color name="positive">#76E0BE</color>
+    <color name="negative">#FF91A0</color>
+</resources>
