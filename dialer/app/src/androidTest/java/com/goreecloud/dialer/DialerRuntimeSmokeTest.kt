@@ -52,6 +52,7 @@ class DialerRuntimeSmokeTest {
                 assertTrue(textExists(root, "Call history is only read"))
                 button(root, "Settings").performClick()
                 assertTrue(textExists(root, "Phone app"))
+                button(root, "Manage Android app permissions")
                 button(root, "Keypad").performClick()
                 assertTrue(textExists(root, "Call a number"))
             }

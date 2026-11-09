@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.content.Intent
+import android.content.ContentUris
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -12,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.provider.Settings
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telecom.Call
@@ -729,6 +731,9 @@ class DialerActivity : Activity() {
                     enteredNumber = entry.number
                     placeCall()
                 }, "Message" to { openSms(entry.number) }))
+                card.addView(action("View contact details", R.color.surface_tonal, R.color.text_main) {
+                    viewContact(entry.id)
+                }.apply { contentDescription = "View Android contact details for " + entry.name })
                 val selected = entry.id.toString() in saved
                 card.addView(action(if (selected) "Remove favorite" else "Add favorite",
                     R.color.surface_tonal, R.color.text_main) {
@@ -783,6 +788,14 @@ class DialerActivity : Activity() {
                 .setNegativeButton("Cancel", null)
                 .show()
         }.apply { isEnabled = savedFavorites > 0 })
+        body.addView(action("Manage Android app permissions", R.color.surface_tonal, R.color.text_main) {
+            try {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", packageName, null)))
+            } catch (_: Exception) {
+                showError("Android app settings could not be opened.")
+            }
+        })
         permissionCard(body, "Call history • device recents", Manifest.permission.READ_CALL_LOG, 202)
         if (Build.VERSION.SDK_INT >= 33) {
             permissionCard(body, "Notifications • incoming and ongoing call controls", Manifest.permission.POST_NOTIFICATIONS, 203)
@@ -991,6 +1004,17 @@ class DialerActivity : Activity() {
         }
         startActivity(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
             .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName))
+    }
+
+    /** Read-only details are displayed by the user's chosen contact provider. */
+    private fun viewContact(id: Long) {
+        if (id <= 0L || !allowed(Manifest.permission.READ_CONTACTS)) {
+            showError("Contact access is not available.")
+            return
+        }
+        val uri = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, id)
+        try { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+        catch (_: Exception) { showError("No contacts viewer is available.") }
     }
 
     /** Contacts edits belong to the user's chosen contact provider, not this app. */
