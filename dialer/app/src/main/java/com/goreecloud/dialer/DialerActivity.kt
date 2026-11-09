@@ -17,7 +17,6 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
-import android.telephony.PhoneNumberUtils
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateUtils
@@ -29,6 +28,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.TextView
 
@@ -40,6 +40,10 @@ class DialerActivity : Activity() {
     private lateinit var root: LinearLayout
     private var screen = "keypad"
     private var enteredNumber = ""
+    private var contactFilter = ""
+    private var recentSearch = ""
+    private var recentFilter = "All"
+    private var openDtmfOnNextRender = false
     private var contacts: List<Contact>? = null
     private val refreshCalls: () -> Unit = {
         runOnUiThread {
@@ -49,7 +53,11 @@ class DialerActivity : Activity() {
     }
 
     private data class Contact(val name: String, val number: String)
-    private data class Recent(val number: String, val type: Int, val whenMs: Long, val seconds: Long)
+    private data class Recent(val number: String, val type: Int, val whenMs: Long,
+        val seconds: Long, val presentation: Int) {
+        fun visibleNumber(): String =
+            if (presentation == CallLog.Calls.PRESENTATION_ALLOWED) number else ""
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,6 +96,7 @@ class DialerActivity : Activity() {
     private fun readIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_CALL_SCREEN, false) == true) {
             screen = "call"
+            openDtmfOnNextRender = intent.getBooleanExtra(EXTRA_DTMF, false)
         } else if (intent?.action == Intent.ACTION_DIAL && intent.data?.scheme == "tel") {
             enteredNumber = intent.data?.schemeSpecificPart.orEmpty()
             screen = "keypad"
@@ -178,7 +187,18 @@ class DialerActivity : Activity() {
             setSelection(text.length)
             setOnEditorActionListener { _, _, _ -> placeCall(); true }
         }
-        body.addView(numberEdit, LinearLayout.LayoutParams(-1, dp(70)))
+        val numberRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        numberRow.addView(numberEdit, LinearLayout.LayoutParams(0, dp(70), 1f))
+        val delete = action("⌫", R.color.surface_tonal, R.color.text_main) {
+            val cursor = numberEdit.selectionStart
+            if (cursor > 0) numberEdit.text.delete(cursor - 1, cursor)
+        }.apply {
+            textSize = 24f
+            contentDescription = "Delete previous digit. Long press to clear number"
+            setOnLongClickListener { numberEdit.text.clear(); true }
+        }
+        numberRow.addView(delete, LinearLayout.LayoutParams(dp(70), dp(64)))
+        body.addView(numberRow)
         val suggestions = column(7)
         fun updateMatches() {
             suggestions.removeAllViews()
@@ -250,10 +270,23 @@ class DialerActivity : Activity() {
             return
         }
         val ringing = call.state == Call.STATE_RINGING
-        val number = call.details.handle?.schemeSpecificPart.orEmpty()
-        val name = call.details.callerDisplayName?.toString()?.takeIf { it.isNotBlank() }
-            ?: queryContacts().firstOrNull { it.number.filter(Char::isDigit) == number.filter(Char::isDigit) }?.name
-            ?: number.ifEmpty { "Unknown caller" }
+        // Respect the carrier/Telecom presentation flags, including withheld callers.
+        val presentation = call.details.handlePresentation
+        val canPresent = presentation == TelecomManager.PRESENTATION_ALLOWED
+        val number = if (canPresent) call.details.handle?.schemeSpecificPart.orEmpty() else ""
+        val name = if (!canPresent) {
+            when (presentation) {
+                TelecomManager.PRESENTATION_RESTRICTED -> "Private caller"
+                TelecomManager.PRESENTATION_PAYPHONE -> "Payphone"
+                else -> "Unknown caller"
+            }
+        } else {
+            call.details.callerDisplayName?.toString()?.takeIf { it.isNotBlank() }
+                ?: queryContacts().firstOrNull {
+                    it.number.filter(Char::isDigit) == number.filter(Char::isDigit)
+                }?.name
+                ?: number.ifEmpty { "Unknown caller" }
+        }
         val state = when (call.state) {
             Call.STATE_RINGING -> "Incoming call"
             Call.STATE_ACTIVE -> "Connected"
@@ -278,16 +311,12 @@ class DialerActivity : Activity() {
         }
         val service = CallSession.service
         val muted = service?.callAudioState?.isMuted ?: false
-        val speaker = (service?.callAudioState?.route ?: 0) == CallAudioState.ROUTE_SPEAKER
         val controlGrid = column(10)
         controlGrid.addView(twoActions(
             (if (muted) "Unmute" else "Mute") to {
                 service?.setMuted(!muted); CallSession.changed()
             },
-            (if (speaker) "Earpiece" else "Speaker") to {
-                service?.setAudioRoute(if (speaker) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
-                CallSession.changed()
-            }
+            "Audio output" to { showAudioRoutes(service) }
         ))
         if ((call.details.callCapabilities and Call.Details.CAPABILITY_HOLD) != 0 || call.state == Call.STATE_HOLDING) {
             controlGrid.addView(twoActions(
@@ -302,6 +331,10 @@ class DialerActivity : Activity() {
             })
         }
         body.addView(controlGrid.apply { topMargin(18) })
+        if (openDtmfOnNextRender && call.state != Call.STATE_RINGING) {
+            openDtmfOnNextRender = false
+            body.post { if (!isFinishing) showDtmf(call, body) }
+        }
         if (CallSession.all().size > 1) {
             val other = CallSession.all().firstOrNull { it !== call && it.state == Call.STATE_HOLDING }
             if (other != null) body.addView(action("Swap calls", R.color.surface_tonal, R.color.text_main) {
@@ -311,6 +344,37 @@ class DialerActivity : Activity() {
         body.addView(action("End call", R.color.negative, R.color.surface) {
             call.disconnect()
         }.apply { topMargin(22) })
+    }
+
+    private fun showAudioRoutes(service: PhoneInCallService?) {
+        if (service == null) {
+            showError("Audio controls are unavailable for this call.")
+            return
+        }
+        val audio = service.callAudioState ?: run {
+            showError("Audio device information is unavailable.")
+            return
+        }
+        val routes = listOf(
+            CallAudioState.ROUTE_EARPIECE to "Earpiece",
+            CallAudioState.ROUTE_SPEAKER to "Speaker",
+            CallAudioState.ROUTE_WIRED_HEADSET to "Wired headset",
+            CallAudioState.ROUTE_BLUETOOTH to "Bluetooth"
+        ).filter { (route, _) -> (audio.supportedRouteMask and route) != 0 }
+        if (routes.isEmpty()) {
+            showError("No selectable audio outputs are available.")
+            return
+        }
+        val choices = routes.map { (route, name) ->
+            if (audio.route == route) "$name (current)" else name
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Call audio output")
+            .setItems(choices) { _, position ->
+                service.setAudioRoute(routes[position].first)
+                CallSession.changed()
+            }.setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showDtmf(call: Call, body: LinearLayout) {
@@ -348,52 +412,168 @@ class DialerActivity : Activity() {
             val result = mutableListOf<Recent>()
             contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
-                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
+                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE,
+                    CallLog.Calls.DURATION, CallLog.Calls.NUMBER_PRESENTATION),
                 null, null, "${CallLog.Calls.DATE} DESC"
             )?.use { cursor ->
-                while (cursor.moveToNext() && result.size < 100) {
-                    result.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1), cursor.getLong(2), cursor.getLong(3)))
+                while (cursor.moveToNext() && result.size < 150) {
+                    result.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
+                        cursor.getLong(2), cursor.getLong(3), cursor.getInt(4)))
                 }
             }
             result
-        } catch (_: SecurityException) { emptyList() } catch (_: IllegalArgumentException) { emptyList() }
-        if (calls.isEmpty()) body.addView(label("No accessible calls yet.", 15f, R.color.text_soft))
-        calls.forEach { entry ->
-            val kind = when (entry.type) {
-                CallLog.Calls.MISSED_TYPE -> "Missed"
-                CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
-                CallLog.Calls.INCOMING_TYPE -> "Incoming"
-                CallLog.Calls.REJECTED_TYPE -> "Declined"
-                else -> "Call"
+        } catch (_: SecurityException) { emptyList() }
+          catch (_: IllegalArgumentException) { emptyList() }
+
+        val options = listOf("All", "Missed", "Incoming", "Outgoing", "Declined")
+        val filterStrip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        options.forEach { option ->
+            val active = recentFilter == option
+            val chip = action(option, if (active) R.color.brand else R.color.surface_tonal,
+                if (active) R.color.on_brand else R.color.text_main) {
+                recentFilter = option
+                render()
+            }.apply {
+                textSize = 13f
+                minHeight = dp(48)
+                contentDescription = "$option call filter" + if (active) ", selected" else ""
             }
-            val number = entry.number.ifEmpty { "Private or unknown" }
-            val card = column(8).apply { background = rounded(R.color.surface, 18) }
-            card.addView(label(number, 17f, R.color.text_main, true))
-            card.addView(label("$kind · ${DateUtils.getRelativeTimeSpanString(entry.whenMs)} · ${entry.seconds}s", 13f, R.color.text_soft))
-            if (entry.number.isNotBlank()) {
-                card.addView(twoActions("Call" to { enteredNumber = entry.number; placeCall() },
-                    "Message" to { openSms(entry.number) }))
+            val params = LinearLayout.LayoutParams(dp(98), dp(50)).apply {
+                marginEnd = dp(5)
             }
-            body.addView(card)
+            filterStrip.addView(chip, params)
         }
+        body.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(filterStrip)
+        })
+
+        val search = EditText(this).apply {
+            hint = "Find a number in recent calls"
+            contentDescription = "Search recent call numbers"
+            inputType = android.text.InputType.TYPE_CLASS_PHONE
+            setSingleLine(true)
+            setTextColor(color(R.color.text_main))
+            setText(recentSearch)
+            setSelection(text.length)
+        }
+        body.addView(search)
+        val results = column(8).apply { setPadding(0, 0, 0, 0) }
+        body.addView(results)
+        fun filteredCalls(): List<Recent> = calls.asSequence()
+            .filter { entry ->
+                when (recentFilter) {
+                    "Missed" -> entry.type == CallLog.Calls.MISSED_TYPE
+                    "Incoming" -> entry.type == CallLog.Calls.INCOMING_TYPE
+                    "Outgoing" -> entry.type == CallLog.Calls.OUTGOING_TYPE
+                    "Declined" -> entry.type == CallLog.Calls.REJECTED_TYPE
+                    else -> true
+                }
+            }
+            .filter { it.visibleNumber().contains(recentSearch.trim(), ignoreCase = true) }
+            .take(60)
+            .toList()
+        fun fillResults() {
+            results.removeAllViews()
+            val filtered = filteredCalls()
+            if (filtered.isEmpty()) {
+                results.addView(label("No matching recent calls.", 15f, R.color.text_soft))
+            }
+            filtered.forEach { entry ->
+                val kind = when (entry.type) {
+                    CallLog.Calls.MISSED_TYPE -> "Missed"
+                    CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
+                    CallLog.Calls.INCOMING_TYPE -> "Incoming"
+                    CallLog.Calls.REJECTED_TYPE -> "Declined"
+                    else -> "Call"
+                }
+                val number = entry.visibleNumber().ifBlank { "Private or unknown" }
+                val card = column(8).apply { background = rounded(R.color.surface, 18) }
+                card.addView(label(number, 17f, R.color.text_main, true))
+                card.addView(label("$kind · ${DateUtils.getRelativeTimeSpanString(entry.whenMs)} · ${entry.seconds}s",
+                    13f, R.color.text_soft))
+                if (entry.visibleNumber().isNotBlank()) {
+                    card.addView(twoActions("Call" to {
+                        enteredNumber = entry.number
+                        placeCall()
+                    }, "Message" to { openSms(entry.number) }))
+                }
+                if (entry.visibleNumber().isNotBlank()) {
+                    card.addView(action("Add to contacts", R.color.surface_tonal, R.color.text_main) {
+                        createContact(entry.number)
+                    })
+                }
+                results.addView(card)
+            }
+        }
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                recentSearch = s?.toString().orEmpty()
+                fillResults()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        fillResults()
     }
 
     private fun renderContacts(body: LinearLayout) {
         body.addView(label("Contacts", 21f, R.color.text_main, true))
+        body.addView(action("Create contact", R.color.surface_tonal, R.color.text_main) {
+            createContact(null)
+        })
         if (!allowed(Manifest.permission.READ_CONTACTS)) {
-            permissionCard(body, "Contacts stay on your device. Allow access to search and call them.", Manifest.permission.READ_CONTACTS, 201)
+            permissionCard(body,
+                "Contacts stay on your device. Allow access to search and call them.",
+                Manifest.permission.READ_CONTACTS, 201)
             return
         }
-        val found = queryContacts()
-        if (found.isEmpty()) body.addView(label("No phone contacts available.", 15f, R.color.text_soft))
-        found.take(200).forEach { entry ->
-            val card = column(8).apply { background = rounded(R.color.surface, 18) }
-            card.addView(label(entry.name, 18f, R.color.text_main, true))
-            card.addView(label(entry.number, 14f, R.color.text_soft))
-            card.addView(twoActions("Call" to { enteredNumber = entry.number; placeCall() },
-                "Message" to { openSms(entry.number) }))
-            body.addView(card)
+        val all = queryContacts()
+        val search = EditText(this).apply {
+            hint = "Search contacts by name or number"
+            contentDescription = "Search contacts"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+            setTextColor(color(R.color.text_main))
+            setText(contactFilter)
+            setSelection(text.length)
         }
+        body.addView(search)
+        val results = column(8).apply { setPadding(0, 0, 0, 0) }
+        body.addView(results)
+        fun fillResults() {
+            results.removeAllViews()
+            val term = contactFilter.trim()
+            val found = all.asSequence().filter { entry ->
+                term.isEmpty() || entry.name.contains(term, ignoreCase = true) ||
+                    entry.number.contains(term, ignoreCase = true) ||
+                    (term.all(Char::isDigit) && PhoneMatcher.matches(term, entry.name, entry.number))
+            }.take(70).toList()
+            if (found.isEmpty()) {
+                results.addView(label("No matching phone contacts.", 15f, R.color.text_soft))
+            }
+            found.forEach { entry ->
+                val card = column(8).apply { background = rounded(R.color.surface, 18) }
+                card.addView(label(entry.name, 18f, R.color.text_main, true))
+                card.addView(label(entry.number, 14f, R.color.text_soft))
+                card.addView(twoActions("Call" to {
+                    enteredNumber = entry.number
+                    placeCall()
+                }, "Message" to { openSms(entry.number) }))
+                results.addView(card)
+            }
+            if (term.isEmpty() && all.size > 70)
+                results.addView(label("Showing 70 contacts. Search to find more.", 13f, R.color.text_soft))
+        }
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                contactFilter = s?.toString().orEmpty()
+                fillResults()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        fillResults()
     }
 
     private fun renderSettings(body: LinearLayout) {
@@ -495,22 +675,13 @@ class DialerActivity : Activity() {
         }
         val uri = Uri.fromParts("tel", number, null)
         val telecom = getSystemService(TelecomManager::class.java)
-        if (PhoneNumberUtils.isEmergencyNumber(number)) {
-            // Never attempt direct emergency placement in this preview: use platform system dialer.
-            val systemPackage = if (Build.VERSION.SDK_INT >= 29) telecom.systemDialerPackage else null
-            val fallback = Intent(Intent.ACTION_DIAL, uri)
-            if (!systemPackage.isNullOrBlank() && systemPackage != packageName) {
-                fallback.setPackage(systemPackage)
-                try { startActivity(fallback); return } catch (_: Exception) { fallback.setPackage(null) }
-            }
-            try { startActivity(Intent.createChooser(fallback, "Use the system Phone app")) }
-            catch (_: Exception) { showError("Unable to open the system emergency dialer.") }
-            return
-        }
         if (!isDefaultPhone()) {
-            // Avoid looping into our own ACTION_DIAL handler without an explicit user choice.
-            try { startActivity(Intent.createChooser(Intent(Intent.ACTION_DIAL, uri), "Choose a phone app")) }
-            catch (_: Exception) { showError("No compatible phone app is available.") }
+            AlertDialog.Builder(this)
+                .setTitle("Default Phone app required")
+                .setMessage("Choose GoreeCloud Dialer as your default Phone app before calling. No call has been placed.")
+                .setPositiveButton("Choose Phone app") { _, _ -> requestPhoneRole() }
+                .setNegativeButton("Cancel", null)
+                .show()
             return
         }
         if (!allowed(Manifest.permission.CALL_PHONE)) {
@@ -518,6 +689,8 @@ class DialerActivity : Activity() {
             return
         }
         try {
+            // Official Android Telecom path includes platform emergency routing to the
+            // preloaded system dialer when appropriate, without app-side guessing.
             telecom.placeCall(uri, Bundle.EMPTY)
             screen = "call"
             render()
@@ -547,6 +720,17 @@ class DialerActivity : Activity() {
         }
         startActivity(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
             .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName))
+    }
+
+    /** Contacts edits belong to the user's chosen contact provider, not this app. */
+    private fun createContact(number: String?) {
+        val intent = Intent(Intent.ACTION_INSERT).apply {
+            type = ContactsContract.Contacts.CONTENT_TYPE
+            if (!number.isNullOrBlank())
+                putExtra(ContactsContract.Intents.Insert.PHONE, number)
+        }
+        try { startActivity(intent) }
+        catch (_: Exception) { showError("No compatible contacts editor is available.") }
     }
 
     private fun openSms(number: String) {
@@ -616,5 +800,6 @@ class DialerActivity : Activity() {
 
     companion object {
         const val EXTRA_CALL_SCREEN = "com.goreecloud.dialer.extra.CALL_SCREEN"
+        const val EXTRA_DTMF = "com.goreecloud.dialer.extra.DTMF"
     }
 }
