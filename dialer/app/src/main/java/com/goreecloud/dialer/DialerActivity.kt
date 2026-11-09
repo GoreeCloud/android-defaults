@@ -193,6 +193,27 @@ class DialerActivity : Activity() {
         recentsFailed = false
     }
 
+    /** Retry only the failed provider; invalidate any queued or stale result. */
+    private fun retryContactsRead() {
+        contactsCancellation?.cancel()
+        contactsCancellation = null
+        contactsGeneration.invalidate()
+        contacts = null
+        contactsLoading = false
+        contactsFailed = false
+        render()
+    }
+
+    private fun retryRecentsRead() {
+        recentsCancellation?.cancel()
+        recentsCancellation = null
+        recentsGeneration.invalidate()
+        recentCalls = null
+        recentsLoading = false
+        recentsFailed = false
+        render()
+    }
+
     private fun render() {
         if (!::root.isInitialized) return
         // Only ringing calls are eligible to appear above the lock screen.
@@ -571,8 +592,11 @@ class DialerActivity : Activity() {
             return
         }
         if (recentsFailed) {
-            body.addView(label("Call history could not be read. Open this screen again to retry.",
+            body.addView(label("Android could not read call history. No call records were changed.",
                 14f, R.color.text_soft))
+            body.addView(action("Retry call history", R.color.surface_tonal, R.color.text_main) {
+                retryRecentsRead()
+            })
         }
 
         val options = listOf("All", "Missed", "Incoming", "Outgoing", "Declined")
@@ -684,8 +708,11 @@ class DialerActivity : Activity() {
             return
         }
         if (contactsFailed) {
-            body.addView(label("Contacts could not be read. Open this screen again to retry.",
+            body.addView(label("Android could not read contacts. Your contacts were not changed.",
                 14f, R.color.text_soft))
+            body.addView(action("Retry contacts", R.color.surface_tonal, R.color.text_main) {
+                retryContactsRead()
+            })
         }
         val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(false to "All contacts", true to "Favorites").forEach { (onlySaved, title) ->
