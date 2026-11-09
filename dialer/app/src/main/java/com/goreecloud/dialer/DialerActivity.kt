@@ -1011,7 +1011,7 @@ class DialerActivity : Activity() {
             val generation = recentsGeneration.next()
             val signal = CancellationSignal()
             recentsCancellation = signal
-            providerExecutor.execute {
+            val accepted = providerExecutor.post {
                 val list = mutableListOf<Recent>()
                 var failed = false
                 try {
