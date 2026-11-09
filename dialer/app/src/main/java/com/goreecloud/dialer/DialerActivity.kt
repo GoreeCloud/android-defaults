@@ -54,11 +54,11 @@ class DialerActivity : Activity() {
     private var contacts: List<Contact>? = null
     private var contactsLoading = false
     private var contactsFailed = false
-    private var contactsGeneration = 0
+    private val contactsGeneration = RequestGeneration()
     private var recentCalls: List<Recent>? = null
     private var recentsLoading = false
     private var recentsFailed = false
-    private var recentsGeneration = 0
+    private val recentsGeneration = RequestGeneration()
     private val refreshCalls: () -> Unit = {
         runOnUiThread {
             if (screen == "call" && CallSession.foreground() == null) screen = "keypad"
@@ -142,15 +142,15 @@ class DialerActivity : Activity() {
 
     override fun onDestroy() {
         // Invalidate callbacks before stopping work; never post into a dead UI.
-        contactsGeneration++
-        recentsGeneration++
+        contactsGeneration.invalidate()
+        recentsGeneration.invalidate()
         providerExecutor.shutdownNow()
         super.onDestroy()
     }
 
     private fun invalidateProviderCaches() {
-        contactsGeneration++
-        recentsGeneration++
+        contactsGeneration.invalidate()
+        recentsGeneration.invalidate()
         contacts = null
         recentCalls = null
         contactsLoading = false
@@ -810,7 +810,7 @@ class DialerActivity : Activity() {
         contacts?.let { return it }
         if (!contactsLoading) {
             contactsLoading = true
-            val generation = ++contactsGeneration
+            val generation = contactsGeneration.next()
             providerExecutor.execute {
                 val list = mutableListOf<Contact>()
                 var failed = false
@@ -835,7 +835,7 @@ class DialerActivity : Activity() {
                     failed = true
                 }
                 runOnUiThread {
-                    if (generation != contactsGeneration || isFinishing || isDestroyed) return@runOnUiThread
+                    if (!contactsGeneration.isCurrent(generation) || isFinishing || isDestroyed) return@runOnUiThread
                     // Permissions can be revoked while the provider query runs.
                     if (!allowed(Manifest.permission.READ_CONTACTS)) {
                         contacts = emptyList()
@@ -861,7 +861,7 @@ class DialerActivity : Activity() {
         recentCalls?.let { return it }
         if (!recentsLoading) {
             recentsLoading = true
-            val generation = ++recentsGeneration
+            val generation = recentsGeneration.next()
             providerExecutor.execute {
                 val list = mutableListOf<Recent>()
                 var failed = false
@@ -882,7 +882,7 @@ class DialerActivity : Activity() {
                     failed = true
                 }
                 runOnUiThread {
-                    if (generation != recentsGeneration || isFinishing || isDestroyed) return@runOnUiThread
+                    if (!recentsGeneration.isCurrent(generation) || isFinishing || isDestroyed) return@runOnUiThread
                     if (!allowed(Manifest.permission.READ_CALL_LOG)) {
                         recentCalls = emptyList()
                         recentsFailed = false
