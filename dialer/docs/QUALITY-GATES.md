@@ -61,6 +61,10 @@ to public issues, CI logs or screenshot artifacts.
   **Performance acceptance is still open**: the current emulator suite does not
   inject slow/malformed providers or large data sets, and device jank has not
   been measured. Query caches are in-memory and invalidated on Activity resume.
+  Failed Contacts and Call Log queries now show explicit local-only Retry
+  controls; each Retry cancels the old request and advances its generation
+  guard. Regression coverage proves stale retry completions are rejected,
+  but no slow OEM provider or corruption fixture has been exercised.
 - Optional Favorites use Android contact IDs. IDs may be reassigned after
   contact-provider migrations. The app retains only local IDs; its Settings
   screen can clear them. Verify migration behavior on real devices.
