@@ -480,6 +480,11 @@ class DialerActivity : Activity() {
                         placeCall()
                     }, "Message" to { openSms(entry.number) }))
                 }
+                if (entry.number.isNotBlank()) {
+                    card.addView(action("Add to contacts", R.color.surface_tonal, R.color.text_main) {
+                        createContact(entry.number)
+                    })
+                }
                 results.addView(card)
             }
         }
@@ -496,6 +501,9 @@ class DialerActivity : Activity() {
 
     private fun renderContacts(body: LinearLayout) {
         body.addView(label("Contacts", 21f, R.color.text_main, true))
+        body.addView(action("Create contact", R.color.surface_tonal, R.color.text_main) {
+            createContact(null)
+        })
         if (!allowed(Manifest.permission.READ_CONTACTS)) {
             permissionCard(body,
                 "Contacts stay on your device. Allow access to search and call them.",
@@ -694,6 +702,17 @@ class DialerActivity : Activity() {
         }
         startActivity(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
             .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName))
+    }
+
+    /** Contacts edits belong to the user's chosen contact provider, not this app. */
+    private fun createContact(number: String?) {
+        val intent = Intent(Intent.ACTION_INSERT).apply {
+            type = ContactsContract.Contacts.CONTENT_TYPE
+            if (!number.isNullOrBlank())
+                putExtra(ContactsContract.Intents.Insert.PHONE, number)
+        }
+        try { startActivity(intent) }
+        catch (_: Exception) { showError("No compatible contacts editor is available.") }
     }
 
     private fun openSms(number: String) {
