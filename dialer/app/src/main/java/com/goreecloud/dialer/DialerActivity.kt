@@ -205,11 +205,14 @@ class DialerActivity : Activity() {
             if (showIncoming) window.addFlags(flags) else window.clearFlags(flags)
         }
         root.removeAllViews()
-        val header = column(20).apply {
-            setPadding(dp(22), dp(20), dp(22), dp(14))
+        val largeText = resources.configuration.fontScale >= 1.3f
+        val header = column(if (largeText) 12 else 20).apply {
+            setPadding(dp(22), dp(if (largeText) 9 else 20), dp(22),
+                dp(if (largeText) 8 else 14))
         }
         header.addView(label("GoreeCloud", 13f, R.color.text_soft, true))
-        header.addView(label(if (screen == "call") "On your call" else "Dialer", 32f, R.color.text_main, true))
+        header.addView(label(if (screen == "call") "On your call" else "Dialer",
+            if (largeText) 27f else 32f, R.color.text_main, true))
         header.addView(label("Private by default · Android calling", 13f, R.color.text_soft))
         if (CallSession.foreground() != null && screen != "call") {
             header.addView(action("Return to active call", R.color.surface_tonal, R.color.text_main) {
@@ -234,6 +237,7 @@ class DialerActivity : Activity() {
             "settings" -> renderSettings(body)
             else -> renderKeypad(body)
         }
+        if (screen == "keypad") addCallBar()
         if (screen != "call") addDock()
         else body.addView(action("Back to keypad", R.color.surface_tonal, R.color.text_main) {
             screen = "keypad"; render()
@@ -241,6 +245,12 @@ class DialerActivity : Activity() {
     }
 
     private fun renderKeypad(body: LinearLayout) {
+        // All heights are logical dp, but text sizes use sp. Increase tile
+        // height as Android fontScale grows so screen readers and large-font
+        // users are not served a visibly clipped keypad.
+        val scale = resources.configuration.fontScale.coerceIn(1f, 3f)
+        val inputHeight = dp(maxOf(70, (70f * scale).toInt()))
+        val tileHeight = dp(maxOf(76, (76f * scale).toInt()))
         body.addView(label("Call a number", 17f, R.color.text_main, true))
         val numberEdit = EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_PHONE
@@ -248,14 +258,14 @@ class DialerActivity : Activity() {
             setSingleLine(true)
             textSize = 26f
             setTextColor(color(R.color.text_main))
-            hint = "Enter phone number"
+            hint = if (resources.configuration.fontScale >= 1.3f) "Phone number" else "Enter phone number"
             contentDescription = "Phone number"
             setText(enteredNumber)
             setSelection(text.length)
             setOnEditorActionListener { _, _, _ -> placeCall(); true }
         }
         val numberRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        numberRow.addView(numberEdit, LinearLayout.LayoutParams(0, dp(70), 1f))
+        numberRow.addView(numberEdit, LinearLayout.LayoutParams(0, inputHeight, 1f))
         val delete = action("⌫", R.color.surface_tonal, R.color.text_main) {
             val cursor = numberEdit.selectionStart
             if (cursor > 0) numberEdit.text.delete(cursor - 1, cursor)
@@ -264,7 +274,7 @@ class DialerActivity : Activity() {
             contentDescription = "Delete previous digit. Long press to clear number"
             setOnLongClickListener { numberEdit.text.clear(); true }
         }
-        numberRow.addView(delete, LinearLayout.LayoutParams(dp(70), dp(64)))
+        numberRow.addView(delete, LinearLayout.LayoutParams(dp(70), inputHeight))
         body.addView(numberRow)
         val suggestions = column(7)
         fun updateMatches() {
@@ -310,7 +320,7 @@ class DialerActivity : Activity() {
                     background = rounded(R.color.surface, 20)
                     isClickable = true
                     isFocusable = true
-                    minimumHeight = dp(76)
+                    minimumHeight = tileHeight
                     setPadding(dp(4), dp(5), dp(4), dp(5))
                     contentDescription = if (digit == "0") "Zero. Long press for plus"
                         else if (letters.isEmpty()) digit else "$digit, $letters"
@@ -339,17 +349,14 @@ class DialerActivity : Activity() {
                         true
                     }
                 }
-                val lp = LinearLayout.LayoutParams(0, dp(76), 1f)
+                val lp = LinearLayout.LayoutParams(0, tileHeight, 1f)
                 lp.setMargins(dp(3), dp(3), dp(3), dp(3))
                 line.addView(key, lp)
             }
             body.addView(line)
         }
-        val callButton = action("Call", R.color.positive, R.color.surface) { placeCall() }
-        callButton.minHeight = dp(64)
-        callButton.contentDescription = "Place phone call"
-        body.addView(callButton.apply { topMargin(16) })
-        body.addView(label("Emergency calls are handed to the system Phone app.", 13f, R.color.text_soft).apply { topMargin(9) })
+        body.addView(label("Android handles emergency routing through the system Phone app.",
+            13f, R.color.text_soft).apply { topMargin(12) })
     }
 
     private fun renderCall(body: LinearLayout) {
@@ -831,7 +838,22 @@ class DialerActivity : Activity() {
         body.addView(privacy.apply { topMargin(14) })
     }
 
+    /** Primary action stays reachable even when the keypad body must scroll. */
+    private fun addCallBar() {
+        val scale = resources.configuration.fontScale.coerceIn(1f, 3f)
+        val height = dp(maxOf(64, (64f * scale).toInt()))
+        val bar = LinearLayout(this).apply {
+            setPadding(dp(22), dp(4), dp(22), dp(4))
+        }
+        val call = action("Call", R.color.positive, R.color.surface) { placeCall() }
+        call.contentDescription = "Place phone call"
+        bar.addView(call, LinearLayout.LayoutParams(-1, height))
+        root.addView(bar)
+    }
+
     private fun addDock() {
+        val textScale = resources.configuration.fontScale.coerceIn(1f, 3f)
+        val dockHeight = dp(maxOf(56, (56f * textScale).toInt()))
         val dock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = rounded(R.color.surface_tonal, 28)
@@ -842,13 +864,24 @@ class DialerActivity : Activity() {
             "contacts" to "Contacts", "settings" to "Settings"
         ).forEach { (id, name) ->
             val selected = screen == id
-            val btn = action(name, if (selected) R.color.brand else R.color.surface_tonal,
+            // Keep large visual labels on one line while preserving the full,
+            // precise spoken tab name for TalkBack.
+            val fontScale = resources.configuration.fontScale
+            val visibleName = when {
+                fontScale >= 2f && id == "keypad" -> "Keys"
+                fontScale >= 2f && id == "settings" -> "More"
+                fontScale >= 1.3f && id == "recents" -> "Calls"
+                fontScale >= 1.3f && id == "contacts" -> "People"
+                else -> name
+            }
+            val btn = action(visibleName, if (selected) R.color.brand else R.color.surface_tonal,
                 if (selected) R.color.on_brand else R.color.text_main) {
                 screen = id; render()
             }
             btn.textSize = 13f
+            btn.isSelected = selected
             btn.contentDescription = "$name tab" + if (selected) ", selected" else ""
-            dock.addView(btn, LinearLayout.LayoutParams(0, dp(56), 1f))
+            dock.addView(btn, LinearLayout.LayoutParams(0, dockHeight, 1f))
         }
         val holder = LinearLayout(this).apply {
             gravity = Gravity.CENTER
