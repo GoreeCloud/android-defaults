@@ -30,6 +30,41 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
         with:
           gradle-version: '8.13'
+      - name: Verify all third-party GitHub Actions are commit-pinned
+        run: |
+          python3 - <<'PY'
+          from collections import Counter
+          from pathlib import Path
+          import re
+
+          text = Path(".github/workflows/dialer.yml").read_text()
+          uses = re.findall(r"^\\s*(?:-\\s*)?uses:\\s*([^\\s#]+)", text, re.MULTILINE)
+          approved = {
+              "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "actions/setup-java": "b843ebf9b913146b38da2eaa7aeddf76074ae1ad",
+              "gradle/actions/setup-gradle": "8da46b539cd8fe6ab27ca75128919a18d757604c",
+              "actions/upload-artifact": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "ReactiveCircus/android-emulator-runner": "a421e43855164a8197daf9d8d40fe71c6996bb0d",
+          }
+          expected = Counter({
+              "actions/checkout": 2,
+              "actions/setup-java": 2,
+              "gradle/actions/setup-gradle": 2,
+              "actions/upload-artifact": 1,
+              "ReactiveCircus/android-emulator-runner": 1,
+          })
+          actual = Counter()
+          for value in uses:
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}", value):
+                  raise SystemExit("Unpinned GitHub Action: " + value)
+              name, sha = value.rsplit("@", 1)
+              if approved.get(name) != sha:
+                  raise SystemExit("Unreviewed action or revision: " + value)
+              actual[name] += 1
+          if actual != expected:
+              raise SystemExit(f"Action inventory changed: {actual}, expected {expected}")
+          print("All CI actions are pinned to reviewed immutable revisions.")
+          PY
       - name: Source privacy and dialer role policy
         run: |
           python3 - <<'PY'
