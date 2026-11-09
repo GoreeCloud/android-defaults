@@ -173,6 +173,26 @@ jobs:
             adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1
             adb shell cat /sdcard/window.xml | grep -Fq "Call a number"
             adb exec-out screencap -p > dialer/build/emulator-screenshots/keypad-android-${{ matrix.api }}.png
+            # Accessible large-text rendering in a disposable emulator only.
+            adb shell settings put system font_scale 1.5
+            adb shell am force-stop com.goreecloud.dialer
+            adb shell am start -n com.goreecloud.dialer/.DialerActivity
+            for i in 1 2 3 4 5 6 7 8; do adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1; adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq "Call a number" && break; adb shell input keyevent KEYCODE_BACK; adb shell am start -n com.goreecloud.dialer/.DialerActivity; sleep 2; done
+            adb shell cat /sdcard/window.xml | grep -Fq "Call a number"
+            test "$(adb shell settings get system font_scale | tr -d '\r')" = "1.5"
+            adb exec-out screencap -p > dialer/build/emulator-screenshots/keypad-large-text-android-${{ matrix.api }}.png
+            adb shell settings put system font_scale 1.0
+            # Android 10+ has supported system dark-mode tooling. Never claim
+            # dark-mode acceptance for API 26 without this platform support.
+            if [ "${{ matrix.api }}" -ge 29 ]; then
+              adb shell cmd uimode night yes
+              adb shell am force-stop com.goreecloud.dialer
+              adb shell am start -n com.goreecloud.dialer/.DialerActivity
+              for i in 1 2 3 4 5 6 7 8; do adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1; adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq "Call a number" && break; adb shell input keyevent KEYCODE_BACK; adb shell am start -n com.goreecloud.dialer/.DialerActivity; sleep 2; done
+              adb shell cat /sdcard/window.xml | grep -Fq "Call a number"
+              adb exec-out screencap -p > dialer/build/emulator-screenshots/keypad-dark-android-${{ matrix.api }}.png
+              adb shell cmd uimode night no
+            fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: success()
         with:

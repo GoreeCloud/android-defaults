@@ -10,7 +10,7 @@ The pinned CI workflow at [Android Dialer CI](../../.github/workflows/dialer.yml
 - Android Lint, debug assembly, and packaged APK name/Internet-permission checks.
 - Non-exported notification action receiver, system-bound `InCallService`, no `INTERNET`, `READ_SMS`, or `WRITE_CALL_LOG` permission, and explicit cloud/device transfer exclusions.
 - Disposable Android 26 and Android 35 emulator instrumentation: offline 4-tab navigation, `tel:` deeplink, package permissions, and local Favorites persistence/cleanup.
-- Best-effort emulator screenshots of empty-state screens in separately retained CI artifacts. Screenshots must be opened and reviewed before any visual-acceptance assertion.
+- Emulator screenshot artifacts include the rendered default keypad and 1.5× Android system font-scale keypad on API 26/35, plus an Android 35 system dark-mode keypad. The job checks accessibility-tree visibility before capture. Screenshots must be opened and reviewed before any visual-acceptance assertion.
 
 **Limits:** These tests do not initiate cellular calls or emulate real OEM/telecom/carrier routing. A green CI run is not call-quality or emergency-readiness certification.
 

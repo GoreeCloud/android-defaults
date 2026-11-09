@@ -241,6 +241,12 @@ class DialerActivity : Activity() {
     }
 
     private fun renderKeypad(body: LinearLayout) {
+        // All heights are logical dp, but text sizes use sp. Increase tile
+        // height as Android fontScale grows so screen readers and large-font
+        // users are not served a visibly clipped keypad.
+        val scale = resources.configuration.fontScale.coerceIn(1f, 3f)
+        val inputHeight = dp(maxOf(70, (70f * scale).toInt()))
+        val tileHeight = dp(maxOf(76, (76f * scale).toInt()))
         body.addView(label("Call a number", 17f, R.color.text_main, true))
         val numberEdit = EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_PHONE
@@ -255,7 +261,7 @@ class DialerActivity : Activity() {
             setOnEditorActionListener { _, _, _ -> placeCall(); true }
         }
         val numberRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        numberRow.addView(numberEdit, LinearLayout.LayoutParams(0, dp(70), 1f))
+        numberRow.addView(numberEdit, LinearLayout.LayoutParams(0, inputHeight, 1f))
         val delete = action("⌫", R.color.surface_tonal, R.color.text_main) {
             val cursor = numberEdit.selectionStart
             if (cursor > 0) numberEdit.text.delete(cursor - 1, cursor)
@@ -264,7 +270,7 @@ class DialerActivity : Activity() {
             contentDescription = "Delete previous digit. Long press to clear number"
             setOnLongClickListener { numberEdit.text.clear(); true }
         }
-        numberRow.addView(delete, LinearLayout.LayoutParams(dp(70), dp(64)))
+        numberRow.addView(delete, LinearLayout.LayoutParams(dp(70), inputHeight))
         body.addView(numberRow)
         val suggestions = column(7)
         fun updateMatches() {
@@ -310,7 +316,7 @@ class DialerActivity : Activity() {
                     background = rounded(R.color.surface, 20)
                     isClickable = true
                     isFocusable = true
-                    minimumHeight = dp(76)
+                    minimumHeight = tileHeight
                     setPadding(dp(4), dp(5), dp(4), dp(5))
                     contentDescription = if (digit == "0") "Zero. Long press for plus"
                         else if (letters.isEmpty()) digit else "$digit, $letters"
@@ -339,7 +345,7 @@ class DialerActivity : Activity() {
                         true
                     }
                 }
-                val lp = LinearLayout.LayoutParams(0, dp(76), 1f)
+                val lp = LinearLayout.LayoutParams(0, tileHeight, 1f)
                 lp.setMargins(dp(3), dp(3), dp(3), dp(3))
                 line.addView(key, lp)
             }
@@ -832,6 +838,8 @@ class DialerActivity : Activity() {
     }
 
     private fun addDock() {
+        val textScale = resources.configuration.fontScale.coerceIn(1f, 3f)
+        val dockHeight = dp(maxOf(56, (56f * textScale).toInt()))
         val dock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = rounded(R.color.surface_tonal, 28)
@@ -848,7 +856,7 @@ class DialerActivity : Activity() {
             }
             btn.textSize = 13f
             btn.contentDescription = "$name tab" + if (selected) ", selected" else ""
-            dock.addView(btn, LinearLayout.LayoutParams(0, dp(56), 1f))
+            dock.addView(btn, LinearLayout.LayoutParams(0, dockHeight, 1f))
         }
         val holder = LinearLayout(this).apply {
             gravity = Gravity.CENTER
