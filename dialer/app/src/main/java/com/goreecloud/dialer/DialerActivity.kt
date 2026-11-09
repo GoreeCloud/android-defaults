@@ -143,7 +143,7 @@ class DialerActivity : Activity() {
         root.addView(header)
 
         val scroller = ScrollView(this).apply {
-            fillViewport = true
+            isFillViewport = true
             isVerticalScrollBarEnabled = false
         }
         val body = column(20).apply {
@@ -289,7 +289,7 @@ class DialerActivity : Activity() {
                 CallSession.changed()
             }
         ))
-        if (call.details.hasCapability(Call.Details.CAPABILITY_HOLD) || call.state == Call.STATE_HOLDING) {
+        if ((call.details.callCapabilities and Call.Details.CAPABILITY_HOLD) != 0 || call.state == Call.STATE_HOLDING) {
             controlGrid.addView(twoActions(
                 (if (call.state == Call.STATE_HOLDING) "Resume" else "Hold") to {
                     if (call.state == Call.STATE_HOLDING) call.unhold() else call.hold()
