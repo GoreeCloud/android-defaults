@@ -10,6 +10,9 @@ import android.content.Intent
 import android.net.Uri
 import android.telecom.CallAudioState
 import android.os.Build
+import android.os.OutcomeReceiver
+import android.telecom.CallEndpoint
+import android.telecom.CallEndpointException
 import android.telecom.Call
 import android.telecom.InCallService
 import android.telecom.TelecomManager
@@ -20,6 +23,53 @@ import android.telecom.TelecomManager
  */
 class PhoneInCallService : InCallService() {
     private val notifications by lazy { getSystemService(NotificationManager::class.java) }
+
+    /** API 34+ endpoint snapshots from Telecom; never synthesize endpoints. */
+    var availableEndpoints: List<CallEndpoint> = emptyList()
+        private set
+    var selectedEndpoint: CallEndpoint? = null
+        private set
+    var mutedOnModernAndroid = false
+        private set
+
+    @android.annotation.TargetApi(34)
+    override fun onAvailableCallEndpointsChanged(availableEndpoints: MutableList<CallEndpoint>) {
+        super.onAvailableCallEndpointsChanged(availableEndpoints)
+        this.availableEndpoints = availableEndpoints.toList()
+        CallSession.changed()
+    }
+
+    @android.annotation.TargetApi(34)
+    override fun onCallEndpointChanged(callEndpoint: CallEndpoint) {
+        super.onCallEndpointChanged(callEndpoint)
+        selectedEndpoint = callEndpoint
+        CallSession.changed()
+    }
+
+    @android.annotation.TargetApi(34)
+    override fun onMuteStateChanged(isMuted: Boolean) {
+        super.onMuteStateChanged(isMuted)
+        mutedOnModernAndroid = isMuted
+        CallSession.changed()
+    }
+
+    @android.annotation.TargetApi(34)
+    fun selectEndpoint(endpoint: CallEndpoint, onFailure: () -> Unit) {
+        if (endpoint !in availableEndpoints) {
+            onFailure()
+            return
+        }
+        requestCallEndpointChange(endpoint, mainExecutor,
+            object : OutcomeReceiver<Void, CallEndpointException> {
+                override fun onResult(result: Void?) {
+                    CallSession.changed()
+                }
+                override fun onError(error: CallEndpointException) {
+                    onFailure()
+                }
+            })
+    }
+
     override fun onCreate() {
         super.onCreate()
         notifications.createNotificationChannel(
@@ -57,6 +107,8 @@ class PhoneInCallService : InCallService() {
 
     override fun onDestroy() {
         notifications.cancel(NOTIFICATION_ID)
+        availableEndpoints = emptyList()
+        selectedEndpoint = null
         CallSession.unbind(this)
         super.onDestroy()
     }

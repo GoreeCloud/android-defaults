@@ -50,7 +50,7 @@ jobs:
               "actions/checkout": 2,
               "actions/setup-java": 2,
               "gradle/actions/setup-gradle": 2,
-              "actions/upload-artifact": 1,
+              "actions/upload-artifact": 2,
               "ReactiveCircus/android-emulator-runner": 1,
           })
           actual = Counter()
@@ -153,4 +153,30 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          script: cd dialer && gradle :app:connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            gradle -p dialer :app:connectedDebugAndroidTest --no-daemon --stacktrace
+            mkdir -p dialer/build/emulator-screenshots
+            adb pull /sdcard/Android/data/com.goreecloud.dialer/files/screenshots dialer/build/emulator-screenshots/android-${{ matrix.api }} || true
+            # Instrumentation test cleanup can remove app-private screenshot files.
+            # Reinstall the same debug APK in this disposable emulator for
+            # a deterministic, permission-denied, empty-state visual capture.
+            adb install -r dialer/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n com.goreecloud.dialer/.DialerActivity
+            sleep 1
+            # Some Google API emulator images show a system Messages crash dialog
+            # after cold boot. Dismiss that external overlay, then bring the
+            # Dialer back to foreground before capturing UI evidence.
+            adb shell input keyevent KEYCODE_BACK
+            adb shell am start -n com.goreecloud.dialer/.DialerActivity
+            # Wait for the actual UI, not an app splash screen or system crash overlay.
+            for i in 1 2 3 4 5 6 7 8; do adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1; adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq "Call a number" && break; adb shell input keyevent KEYCODE_BACK; adb shell am start -n com.goreecloud.dialer/.DialerActivity; sleep 2; done
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1
+            adb shell cat /sdcard/window.xml | grep -Fq "Call a number"
+            adb exec-out screencap -p > dialer/build/emulator-screenshots/keypad-android-${{ matrix.api }}.png
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: success()
+        with:
+          name: goreecloud-dialer-android-${{ matrix.api }}-screens
+          path: dialer/build/emulator-screenshots/**/*.png
+          if-no-files-found: warn
+          retention-days: 7

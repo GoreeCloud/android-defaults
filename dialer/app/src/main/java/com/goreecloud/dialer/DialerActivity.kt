@@ -41,6 +41,8 @@ class DialerActivity : Activity() {
     private var screen = "keypad"
     private var enteredNumber = ""
     private var contactFilter = ""
+    private var favoritesOnly = false
+    private val favorites by lazy { FavoritesStore(applicationContext) }
     private var recentSearch = ""
     private var recentFilter = "All"
     private var openDtmfOnNextRender = false
@@ -52,7 +54,7 @@ class DialerActivity : Activity() {
         }
     }
 
-    private data class Contact(val name: String, val number: String)
+    private data class Contact(val name: String, val number: String, val id: Long)
     private data class Recent(val number: String, val type: Int, val whenMs: Long,
         val seconds: Long, val presentation: Int) {
         fun visibleNumber(): String =
@@ -204,9 +206,12 @@ class DialerActivity : Activity() {
             suggestions.removeAllViews()
             if (enteredNumber.filter { it.isDigit() }.length < 2) return
             if (!allowed(Manifest.permission.READ_CONTACTS)) return
+            val saved = favorites.all()
             val found = queryContacts()
+                .asSequence()
                 .filter { PhoneMatcher.matches(enteredNumber, it.name, it.number) }
-                .take(3)
+                .sortedByDescending { it.id.toString() in saved }
+                .take(3).toList()
             found.forEach { contact ->
                 suggestions.addView(action("${contact.name} · ${contact.number}", R.color.surface_tonal, R.color.text_main) {
                     enteredNumber = contact.number
@@ -234,20 +239,40 @@ class DialerActivity : Activity() {
         for (row in keys) {
             val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             row.forEach { (digit, letters) ->
-                val key = action(
-                    if (letters.isEmpty()) digit else "$digit\n$letters",
-                    R.color.surface, R.color.text_main
-                ) { numberEdit.text.insert(numberEdit.selectionStart.coerceAtLeast(0), digit) }
-                key.textSize = 23f
-                key.minHeight = dp(69)
+                val key = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    background = rounded(R.color.surface, 20)
+                    isClickable = true
+                    isFocusable = true
+                    minimumHeight = dp(76)
+                    setPadding(dp(4), dp(5), dp(4), dp(5))
+                    contentDescription = if (digit == "0") "Zero. Long press for plus"
+                        else if (letters.isEmpty()) digit else "$digit, $letters"
+                }
+                key.addView(label(digit, 26f, R.color.text_main, true).apply {
+                    gravity = Gravity.CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                })
+                if (letters.isNotEmpty()) {
+                    key.addView(label(letters, 11f, R.color.text_soft).apply {
+                        gravity = Gravity.CENTER
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    })
+                } else if (digit == "0") {
+                    key.addView(label("+", 12f, R.color.text_soft).apply {
+                        gravity = Gravity.CENTER
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    })
+                }
+                key.setOnClickListener {
+                    numberEdit.text.insert(numberEdit.selectionStart.coerceAtLeast(0), digit)
+                }
                 if (digit == "0") {
                     key.setOnLongClickListener {
                         numberEdit.text.insert(numberEdit.selectionStart.coerceAtLeast(0), "+")
                         true
                     }
-                    key.contentDescription = "Zero. Long press for plus"
-                } else {
-                    key.contentDescription = if (letters.isEmpty()) digit else "$digit, $letters"
                 }
                 val lp = LinearLayout.LayoutParams(0, dp(76), 1f)
                 lp.setMargins(dp(3), dp(3), dp(3), dp(3))
@@ -310,7 +335,9 @@ class DialerActivity : Activity() {
             return
         }
         val service = CallSession.service
-        val muted = service?.callAudioState?.isMuted ?: false
+        val muted = if (Build.VERSION.SDK_INT >= 34) {
+            service?.mutedOnModernAndroid ?: false
+        } else service?.callAudioState?.isMuted ?: false
         val controlGrid = column(10)
         controlGrid.addView(twoActions(
             (if (muted) "Unmute" else "Mute") to {
@@ -335,6 +362,24 @@ class DialerActivity : Activity() {
             openDtmfOnNextRender = false
             body.post { if (!isFinishing) showDtmf(call, body) }
         }
+        if (call.state == Call.STATE_ACTIVE && service?.canAddCall() == true) {
+            body.addView(action("Add call", R.color.surface_tonal, R.color.text_main) {
+                enteredNumber = ""
+                screen = "keypad"
+                render()
+            }.apply { topMargin(10) })
+        }
+        val capabilities = call.details.callCapabilities
+        if ((capabilities and Call.Details.CAPABILITY_MERGE_CONFERENCE) != 0) {
+            body.addView(action("Merge conference", R.color.surface_tonal, R.color.text_main) {
+                call.mergeConference()
+            }.apply { topMargin(10) })
+        }
+        if ((capabilities and Call.Details.CAPABILITY_SWAP_CONFERENCE) != 0) {
+            body.addView(action("Swap conference", R.color.surface_tonal, R.color.text_main) {
+                call.swapConference()
+            }.apply { topMargin(10) })
+        }
         if (CallSession.all().size > 1) {
             val other = CallSession.all().firstOrNull { it !== call && it.state == Call.STATE_HOLDING }
             if (other != null) body.addView(action("Swap calls", R.color.surface_tonal, R.color.text_main) {
@@ -349,6 +394,10 @@ class DialerActivity : Activity() {
     private fun showAudioRoutes(service: PhoneInCallService?) {
         if (service == null) {
             showError("Audio controls are unavailable for this call.")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 34) {
+            showModernAudioRoutes(service)
             return
         }
         val audio = service.callAudioState ?: run {
@@ -377,7 +426,31 @@ class DialerActivity : Activity() {
             .show()
     }
 
+    @android.annotation.TargetApi(34)
+    private fun showModernAudioRoutes(service: PhoneInCallService) {
+        val endpoints = service.availableEndpoints
+        if (endpoints.isEmpty()) {
+            showError("Android has not provided selectable audio devices yet.")
+            return
+        }
+        val active = service.selectedEndpoint
+        val choices = endpoints.map { endpoint ->
+            val label = endpoint.endpointName.toString()
+            if (endpoint.identifier == active?.identifier) "$label (current)" else label
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Call audio output")
+            .setItems(choices) { _, index ->
+                service.selectEndpoint(endpoints[index]) {
+                    if (!isFinishing) showError("Android could not switch audio output.")
+                }
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
     private fun showDtmf(call: Call, body: LinearLayout) {
+        val handler = android.os.Handler(mainLooper)
+        var pendingStop: Runnable? = null
         val pad = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(12), dp(10), dp(10))
@@ -386,9 +459,15 @@ class DialerActivity : Activity() {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             line.forEach { digit ->
                 val key = action(digit.toString(), R.color.surface_tonal, R.color.text_main) {
+                    // Cancel the previous stop so rapid digit entry cannot
+                    // truncate the new tone. Always stop on dialog dismissal.
+                    pendingStop?.let(handler::removeCallbacks)
                     call.playDtmfTone(digit)
-                    android.os.Handler(mainLooper).postDelayed({ call.stopDtmfTone() }, 200L)
+                    val stop = Runnable { call.stopDtmfTone() }
+                    pendingStop = stop
+                    handler.postDelayed(stop, 180L)
                 }
+                key.contentDescription = "Send DTMF " + digit
                 row.addView(key, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
                     setMargins(dp(3), dp(3), dp(3), dp(3))
                 })
@@ -399,7 +478,13 @@ class DialerActivity : Activity() {
             .setTitle("In-call keypad")
             .setView(pad)
             .setNegativeButton("Close", null)
-            .show()
+            .create()
+            .apply {
+                setOnDismissListener {
+                    pendingStop?.let(handler::removeCallbacks)
+                    call.stopDtmfTone()
+                }
+            }.show()
     }
 
     private fun renderRecents(body: LinearLayout) {
@@ -529,6 +614,21 @@ class DialerActivity : Activity() {
             return
         }
         val all = queryContacts()
+        val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf(false to "All contacts", true to "Favorites").forEach { (onlySaved, title) ->
+            val selected = favoritesOnly == onlySaved
+            val chip = action(title, if (selected) R.color.brand else R.color.surface_tonal,
+                if (selected) R.color.on_brand else R.color.text_main) {
+                favoritesOnly = onlySaved
+                render()
+            }.apply {
+                isSelected = selected
+                contentDescription = title + if (selected) ", selected" else ""
+            }
+            filterRow.addView(chip, LinearLayout.LayoutParams(0, dp(56), 1f))
+        }
+        body.addView(filterRow)
+        body.addView(label("Favorites are saved only on this device.", 13f, R.color.text_soft))
         val search = EditText(this).apply {
             hint = "Search contacts by name or number"
             contentDescription = "Search contacts"
@@ -544,13 +644,18 @@ class DialerActivity : Activity() {
         fun fillResults() {
             results.removeAllViews()
             val term = contactFilter.trim()
-            val found = all.asSequence().filter { entry ->
-                term.isEmpty() || entry.name.contains(term, ignoreCase = true) ||
-                    entry.number.contains(term, ignoreCase = true) ||
-                    (term.all(Char::isDigit) && PhoneMatcher.matches(term, entry.name, entry.number))
-            }.take(70).toList()
+            val saved = favorites.all()
+            val found = all.asSequence()
+                .filter { !favoritesOnly || it.id.toString() in saved }
+                .filter { entry ->
+                    term.isEmpty() || entry.name.contains(term, ignoreCase = true) ||
+                        entry.number.contains(term, ignoreCase = true) ||
+                        (term.all(Char::isDigit) && PhoneMatcher.matches(term, entry.name, entry.number))
+                }.sortedByDescending { it.id.toString() in saved }
+                .take(70).toList()
             if (found.isEmpty()) {
-                results.addView(label("No matching phone contacts.", 15f, R.color.text_soft))
+                results.addView(label(if (favoritesOnly) "No matching favorites. Add a favorite from All contacts."
+                    else "No matching phone contacts.", 15f, R.color.text_soft))
             }
             found.forEach { entry ->
                 val card = column(8).apply { background = rounded(R.color.surface, 18) }
@@ -560,6 +665,15 @@ class DialerActivity : Activity() {
                     enteredNumber = entry.number
                     placeCall()
                 }, "Message" to { openSms(entry.number) }))
+                val selected = entry.id.toString() in saved
+                card.addView(action(if (selected) "Remove favorite" else "Add favorite",
+                    R.color.surface_tonal, R.color.text_main) {
+                    favorites.toggle(entry.id)
+                    fillResults()
+                }.apply {
+                    contentDescription = (if (selected) "Remove " else "Add ") +
+                        entry.name + (if (selected) " from favorites" else " to favorites")
+                })
                 results.addView(card)
             }
             if (term.isEmpty() && all.size > 70)
@@ -592,6 +706,19 @@ class DialerActivity : Activity() {
         body.addView(status)
         body.addView(label("Optional local permissions", 20f, R.color.text_main, true).apply { topMargin(15) })
         permissionCard(body, "Contacts • offline T9 search and contact dialing", Manifest.permission.READ_CONTACTS, 201)
+        val savedFavorites = favorites.all().size
+        body.addView(action("Clear local favorites ($savedFavorites)",
+            R.color.surface_tonal, R.color.text_main) {
+            AlertDialog.Builder(this)
+                .setTitle("Clear saved favorites?")
+                .setMessage("This only removes GoreeCloud Dialer's local favorite selections. Contacts stay unchanged.")
+                .setPositiveButton("Clear") { _, _ ->
+                    favorites.clear()
+                    render()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }.apply { isEnabled = savedFavorites > 0 })
         permissionCard(body, "Call history • device recents", Manifest.permission.READ_CALL_LOG, 202)
         if (Build.VERSION.SDK_INT >= 33) {
             permissionCard(body, "Notifications • incoming and ongoing call controls", Manifest.permission.POST_NOTIFICATIONS, 203)
@@ -626,8 +753,12 @@ class DialerActivity : Activity() {
             btn.contentDescription = "$name tab" + if (selected) ", selected" else ""
             dock.addView(btn, LinearLayout.LayoutParams(0, dp(56), 1f))
         }
-        val holder = LinearLayout(this).apply { setPadding(dp(14), dp(8), dp(14), dp(12)) }
-        holder.addView(dock, LinearLayout.LayoutParams(-1, -2))
+        val holder = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(14), dp(8), dp(14), dp(12))
+        }
+        val width = minOf(dp(560), resources.displayMetrics.widthPixels - dp(28))
+        holder.addView(dock, LinearLayout.LayoutParams(width.coerceAtLeast(dp(200)), -2))
         root.addView(holder)
     }
 
@@ -650,12 +781,15 @@ class DialerActivity : Activity() {
             contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    ContactsContract.CommonDataKinds.Phone.NUMBER),
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
                 null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             )?.use { cursor ->
                 while (cursor.moveToNext() && list.size < 1500) {
                     val number = cursor.getString(1).orEmpty()
-                    if (number.isNotBlank()) list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number))
+                    val id = cursor.getLong(2)
+                    if (number.isNotBlank() && id > 0L)
+                        list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number, id))
                 }
             }
         } catch (_: SecurityException) {
