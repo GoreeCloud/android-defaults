@@ -315,7 +315,9 @@ class DialerActivity : Activity() {
             return
         }
         val service = CallSession.service
-        val muted = service?.callAudioState?.isMuted ?: false
+        val muted = if (Build.VERSION.SDK_INT >= 34) {
+            service?.mutedOnModernAndroid ?: false
+        } else service?.callAudioState?.isMuted ?: false
         val controlGrid = column(10)
         controlGrid.addView(twoActions(
             (if (muted) "Unmute" else "Mute") to {
@@ -356,6 +358,10 @@ class DialerActivity : Activity() {
             showError("Audio controls are unavailable for this call.")
             return
         }
+        if (Build.VERSION.SDK_INT >= 34) {
+            showModernAudioRoutes(service)
+            return
+        }
         val audio = service.callAudioState ?: run {
             showError("Audio device information is unavailable.")
             return
@@ -380,6 +386,28 @@ class DialerActivity : Activity() {
                 CallSession.changed()
             }.setNegativeButton("Cancel", null)
             .show()
+    }
+
+    @android.annotation.TargetApi(34)
+    private fun showModernAudioRoutes(service: PhoneInCallService) {
+        val endpoints = service.availableEndpoints
+        if (endpoints.isEmpty()) {
+            showError("Android has not provided selectable audio devices yet.")
+            return
+        }
+        val active = service.selectedEndpoint
+        val choices = endpoints.map { endpoint ->
+            val label = endpoint.endpointName.toString()
+            if (endpoint.identifier == active?.identifier) "$label (current)" else label
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Call audio output")
+            .setItems(choices) { _, index ->
+                service.selectEndpoint(endpoints[index]) {
+                    if (!isFinishing) showError("Android could not switch audio output.")
+                }
+            }
+            .setNegativeButton("Cancel", null).show()
     }
 
     private fun showDtmf(call: Call, body: LinearLayout) {
