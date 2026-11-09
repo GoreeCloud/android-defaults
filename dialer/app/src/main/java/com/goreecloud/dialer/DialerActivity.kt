@@ -239,20 +239,40 @@ class DialerActivity : Activity() {
         for (row in keys) {
             val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             row.forEach { (digit, letters) ->
-                val key = action(
-                    if (letters.isEmpty()) digit else "$digit\n$letters",
-                    R.color.surface, R.color.text_main
-                ) { numberEdit.text.insert(numberEdit.selectionStart.coerceAtLeast(0), digit) }
-                key.textSize = 23f
-                key.minHeight = dp(69)
+                val key = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    background = rounded(R.color.surface, 20)
+                    isClickable = true
+                    isFocusable = true
+                    minHeight = dp(76)
+                    setPadding(dp(4), dp(5), dp(4), dp(5))
+                    contentDescription = if (digit == "0") "Zero. Long press for plus"
+                        else if (letters.isEmpty()) digit else "$digit, $letters"
+                }
+                key.addView(label(digit, 26f, R.color.text_main, true).apply {
+                    gravity = Gravity.CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                })
+                if (letters.isNotEmpty()) {
+                    key.addView(label(letters, 11f, R.color.text_soft).apply {
+                        gravity = Gravity.CENTER
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    })
+                } else if (digit == "0") {
+                    key.addView(label("+", 12f, R.color.text_soft).apply {
+                        gravity = Gravity.CENTER
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    })
+                }
+                key.setOnClickListener {
+                    numberEdit.text.insert(numberEdit.selectionStart.coerceAtLeast(0), digit)
+                }
                 if (digit == "0") {
                     key.setOnLongClickListener {
                         numberEdit.text.insert(numberEdit.selectionStart.coerceAtLeast(0), "+")
                         true
                     }
-                    key.contentDescription = "Zero. Long press for plus"
-                } else {
-                    key.contentDescription = if (letters.isEmpty()) digit else "$digit, $letters"
                 }
                 val lp = LinearLayout.LayoutParams(0, dp(76), 1f)
                 lp.setMargins(dp(3), dp(3), dp(3), dp(3))
