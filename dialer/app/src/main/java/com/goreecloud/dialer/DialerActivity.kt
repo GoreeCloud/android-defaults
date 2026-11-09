@@ -342,6 +342,24 @@ class DialerActivity : Activity() {
             openDtmfOnNextRender = false
             body.post { if (!isFinishing) showDtmf(call, body) }
         }
+        if (call.state == Call.STATE_ACTIVE && service?.canAddCall() == true) {
+            body.addView(action("Add call", R.color.surface_tonal, R.color.text_main) {
+                enteredNumber = ""
+                screen = "keypad"
+                render()
+            }.apply { topMargin(10) })
+        }
+        val capabilities = call.details.callCapabilities
+        if ((capabilities and Call.Details.CAPABILITY_MERGE_CONFERENCE) != 0) {
+            body.addView(action("Merge conference", R.color.surface_tonal, R.color.text_main) {
+                call.mergeConference()
+            }.apply { topMargin(10) })
+        }
+        if ((capabilities and Call.Details.CAPABILITY_SWAP_CONFERENCE) != 0) {
+            body.addView(action("Swap conference", R.color.surface_tonal, R.color.text_main) {
+                call.swapConference()
+            }.apply { topMargin(10) })
+        }
         if (CallSession.all().size > 1) {
             val other = CallSession.all().firstOrNull { it !== call && it.state == Call.STATE_HOLDING }
             if (other != null) body.addView(action("Swap calls", R.color.surface_tonal, R.color.text_main) {
@@ -411,6 +429,8 @@ class DialerActivity : Activity() {
     }
 
     private fun showDtmf(call: Call, body: LinearLayout) {
+        val handler = android.os.Handler(mainLooper)
+        var pendingStop: Runnable? = null
         val pad = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(12), dp(10), dp(10))
@@ -419,9 +439,15 @@ class DialerActivity : Activity() {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             line.forEach { digit ->
                 val key = action(digit.toString(), R.color.surface_tonal, R.color.text_main) {
+                    // Cancel the previous stop so rapid digit entry cannot
+                    // truncate the new tone. Always stop on dialog dismissal.
+                    pendingStop?.let(handler::removeCallbacks)
                     call.playDtmfTone(digit)
-                    android.os.Handler(mainLooper).postDelayed({ call.stopDtmfTone() }, 200L)
+                    val stop = Runnable { call.stopDtmfTone() }
+                    pendingStop = stop
+                    handler.postDelayed(stop, 180L)
                 }
+                key.contentDescription = "Send DTMF " + digit
                 row.addView(key, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
                     setMargins(dp(3), dp(3), dp(3), dp(3))
                 })
@@ -432,7 +458,13 @@ class DialerActivity : Activity() {
             .setTitle("In-call keypad")
             .setView(pad)
             .setNegativeButton("Close", null)
-            .show()
+            .create()
+            .apply {
+                setOnDismissListener {
+                    pendingStop?.let(handler::removeCallbacks)
+                    call.stopDtmfTone()
+                }
+            }.show()
     }
 
     private fun renderRecents(body: LinearLayout) {
