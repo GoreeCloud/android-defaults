@@ -29,10 +29,10 @@ class PhoneMatcherTest {
 
     @Test fun matchesT9NumbersAndAccentedNames() {
         assertEquals("25423", PhoneMatcher.t9("Alice"))
-        assertEquals("3674", PhoneMatcher.t9("Éric"))
+        assertEquals("3742", PhoneMatcher.t9("Éric"))
         assertTrue(PhoneMatcher.matches("254", "Alice", "555-0100"))
         assertTrue(PhoneMatcher.matches("0100", "Alice", "555-0100"))
-        assertTrue(PhoneMatcher.matches("367", "Éric", "555-0100"))
+        assertTrue(PhoneMatcher.matches("374", "Éric", "555-0100"))
         assertFalse(PhoneMatcher.matches("999", "Alice", "555-0100"))
     }
 
