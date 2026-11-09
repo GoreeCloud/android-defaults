@@ -497,7 +497,7 @@ class DialerActivity : Activity() {
         val telecom = getSystemService(TelecomManager::class.java)
         if (PhoneNumberUtils.isEmergencyNumber(number)) {
             // Never attempt direct emergency placement in this preview: use platform system dialer.
-            val systemPackage = telecom.systemDialerPackage
+            val systemPackage = if (Build.VERSION.SDK_INT >= 29) telecom.systemDialerPackage else null
             val fallback = Intent(Intent.ACTION_DIAL, uri)
             if (!systemPackage.isNullOrBlank() && systemPackage != packageName) {
                 fallback.setPackage(systemPackage)
@@ -599,8 +599,8 @@ class DialerActivity : Activity() {
 
     private fun twoActions(left: Pair<String, () -> Unit>, right: Pair<String, () -> Unit>): LinearLayout {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf(left, right).forEach { (title, action) ->
-            val btn = action(title, R.color.surface_tonal, R.color.text_main, action)
+        listOf(left, right).forEach { (title, callback) ->
+            val btn = action(title, R.color.surface_tonal, R.color.text_main, callback)
             val lp = LinearLayout.LayoutParams(0, dp(60), 1f)
             lp.setMargins(dp(3), dp(3), dp(3), dp(3))
             row.addView(btn, lp)
