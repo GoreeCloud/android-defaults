@@ -34,7 +34,6 @@ import android.widget.LinearLayout
 import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.TextView
-import java.util.concurrent.Executors
 
 /**
  * Native Android UI with a persistent floating bottom dock.
@@ -53,7 +52,7 @@ class DialerActivity : Activity() {
     // Android providers may be slow. Never run Contacts/CallLog queries during a
     // frame. A single bounded worker serializes access and generations discard
     // callbacks from permission changes, Activity recreation, or stale reads.
-    private val providerExecutor = Executors.newSingleThreadExecutor()
+    private val providerExecutor = BoundedProviderWorker()
     private var contacts: List<Contact>? = null
     private var contactsLoading = false
     private var contactsFailed = false
@@ -948,7 +947,7 @@ class DialerActivity : Activity() {
             val generation = contactsGeneration.next()
             val signal = CancellationSignal()
             contactsCancellation = signal
-            providerExecutor.execute {
+            val accepted = providerExecutor.post {
                 val list = mutableListOf<Contact>()
                 var failed = false
                 try {
@@ -990,6 +989,15 @@ class DialerActivity : Activity() {
                     if ((screen == "contacts" || screen == "keypad" || screen == "call") &&
                         !typingNumber) render()
                 }
+            }
+            if (!accepted) {
+                // Never run provider reads on the UI thread when an OEM provider
+                // hangs. Let the user retry after the bounded queue drains.
+                contactsCancellation?.cancel()
+                contactsCancellation = null
+                contacts = emptyList()
+                contactsLoading = false
+                contactsFailed = true
             }
         }
         return emptyList()
@@ -1035,6 +1043,13 @@ class DialerActivity : Activity() {
                     recentsLoading = false
                     if (screen == "recents") render()
                 }
+            }
+            if (!accepted) {
+                recentsCancellation?.cancel()
+                recentsCancellation = null
+                recentCalls = emptyList()
+                recentsLoading = false
+                recentsFailed = true
             }
         }
         return emptyList()

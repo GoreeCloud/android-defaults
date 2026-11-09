@@ -57,7 +57,11 @@ to public issues, CI logs or screenshot artifacts.
 
 - Contact and call-log provider reads are now serialized on a background
   executor with bounded cursor scans, actual Android provider cancellation signals
-  and request-generation guards.
+  and request-generation guards. The single-worker queue holds at most
+  **two pending requests**; when saturated, it fails to an explicit
+  local-only Retry state instead of executing a provider query on the UI
+  thread or accumulating requests without bound. Three JVM tests verify
+  bounded rejection, off-main execution and post-shutdown refusal.
   **Android 16 compatibility and performance acceptance remain independent of emulator smoke.**
   **Performance acceptance is still open**: the current emulator suite does not
   inject slow/malformed providers or large data sets, and device jank has not
