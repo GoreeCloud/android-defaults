@@ -48,6 +48,10 @@ The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a dev
 - **Contact and permission handoffs**: View a contact's details using Android's
   contacts provider; open Android's app-permissions page from Dialer Settings.
   Neither action grants new privileges to GoreeCloud Dialer.
+- **Local data reset**: Settings includes an explicit, confirmed clear action
+  for saved Favorites IDs, dial-pad drafts, search filters and in-process
+  Contacts/Call Log caches. It does not modify Android contacts, carrier call
+  records, SIM configuration, or operating-system permissions.
 - **Screenshot evidence**: Android emulator smoke tests may produce local-only
   blank-state screenshots for UI review. These are CI evidence, not user photos,
   phone data, product release files, or proof of visual acceptance.

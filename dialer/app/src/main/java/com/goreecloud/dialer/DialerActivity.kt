@@ -800,6 +800,26 @@ class DialerActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) {
             permissionCard(body, "Notifications • incoming and ongoing call controls", Manifest.permission.POST_NOTIFICATIONS, 203)
         }
+        body.addView(action("Clear Dialer local data", R.color.surface_tonal, R.color.text_main) {
+            AlertDialog.Builder(this)
+                .setTitle("Clear Dialer data on this device?")
+                .setMessage(
+                    "Clears favorite selections, keypad draft, search filters and Dialer caches. " +
+                        "Android contacts, carrier call history, SIM settings and permissions are not deleted."
+                )
+                .setPositiveButton("Clear local data") { _, _ ->
+                    favorites.clear()
+                    enteredNumber = ""
+                    contactFilter = ""
+                    recentSearch = ""
+                    recentFilter = "All"
+                    favoritesOnly = false
+                    invalidateProviderCaches()
+                    render()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        })
         val privacy = column(10).apply { background = rounded(R.color.surface, 18) }
         privacy.addView(label("Privacy and safety", 18f, R.color.text_main, true))
         privacy.addView(label(
