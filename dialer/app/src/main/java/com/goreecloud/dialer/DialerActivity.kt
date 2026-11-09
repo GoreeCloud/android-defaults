@@ -31,6 +31,7 @@ import android.widget.LinearLayout
 import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.concurrent.Executors
 
 /**
  * Native Android UI with a persistent floating bottom dock.
@@ -46,7 +47,18 @@ class DialerActivity : Activity() {
     private var recentSearch = ""
     private var recentFilter = "All"
     private var openDtmfOnNextRender = false
+    // Android providers may be slow. Never run Contacts/CallLog queries during a
+    // frame. A single bounded worker serializes access and generations discard
+    // callbacks from permission changes, Activity recreation, or stale reads.
+    private val providerExecutor = Executors.newSingleThreadExecutor()
     private var contacts: List<Contact>? = null
+    private var contactsLoading = false
+    private var contactsFailed = false
+    private val contactsGeneration = RequestGeneration()
+    private var recentCalls: List<Recent>? = null
+    private var recentsLoading = false
+    private var recentsFailed = false
+    private val recentsGeneration = RequestGeneration()
     private val refreshCalls: () -> Unit = {
         runOnUiThread {
             if (screen == "call" && CallSession.foreground() == null) screen = "keypad"
@@ -118,14 +130,33 @@ class DialerActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        contacts = null // Re-query only authorized local providers when screen next needs them.
+        invalidateProviderCaches()
         if (::root.isInitialized) render()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
-        contacts = null
+        invalidateProviderCaches()
         render()
+    }
+
+    override fun onDestroy() {
+        // Invalidate callbacks before stopping work; never post into a dead UI.
+        contactsGeneration.invalidate()
+        recentsGeneration.invalidate()
+        providerExecutor.shutdownNow()
+        super.onDestroy()
+    }
+
+    private fun invalidateProviderCaches() {
+        contactsGeneration.invalidate()
+        recentsGeneration.invalidate()
+        contacts = null
+        recentCalls = null
+        contactsLoading = false
+        recentsLoading = false
+        contactsFailed = false
+        recentsFailed = false
     }
 
     private fun render() {
@@ -493,22 +524,15 @@ class DialerActivity : Activity() {
             permissionCard(body, "Call history is only read with your permission.", Manifest.permission.READ_CALL_LOG, 202)
             return
         }
-        val calls = try {
-            val result = mutableListOf<Recent>()
-            contentResolver.query(
-                CallLog.Calls.CONTENT_URI,
-                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE,
-                    CallLog.Calls.DURATION, CallLog.Calls.NUMBER_PRESENTATION),
-                null, null, "${CallLog.Calls.DATE} DESC"
-            )?.use { cursor ->
-                while (cursor.moveToNext() && result.size < 150) {
-                    result.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
-                        cursor.getLong(2), cursor.getLong(3), cursor.getInt(4)))
-                }
-            }
-            result
-        } catch (_: SecurityException) { emptyList() }
-          catch (_: IllegalArgumentException) { emptyList() }
+        val calls = queryRecentCalls()
+        if (recentCalls == null) {
+            body.addView(label("Loading recent calls from this device…", 15f, R.color.text_soft))
+            return
+        }
+        if (recentsFailed) {
+            body.addView(label("Call history could not be read. Open this screen again to retry.",
+                14f, R.color.text_soft))
+        }
 
         val options = listOf("All", "Missed", "Incoming", "Outgoing", "Declined")
         val filterStrip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -614,6 +638,14 @@ class DialerActivity : Activity() {
             return
         }
         val all = queryContacts()
+        if (contacts == null) {
+            body.addView(label("Loading contacts from this device…", 15f, R.color.text_soft))
+            return
+        }
+        if (contactsFailed) {
+            body.addView(label("Contacts could not be read. Open this screen again to retry.",
+                14f, R.color.text_soft))
+        }
         val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(false to "All contacts", true to "Favorites").forEach { (onlySaved, title) ->
             val selected = favoritesOnly == onlySaved
@@ -776,29 +808,94 @@ class DialerActivity : Activity() {
     private fun queryContacts(): List<Contact> {
         if (!allowed(Manifest.permission.READ_CONTACTS)) return emptyList()
         contacts?.let { return it }
-        val list = mutableListOf<Contact>()
-        try {
-            contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    ContactsContract.CommonDataKinds.Phone.NUMBER,
-                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
-                null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-            )?.use { cursor ->
-                while (cursor.moveToNext() && list.size < 1500) {
-                    val number = cursor.getString(1).orEmpty()
-                    val id = cursor.getLong(2)
-                    if (number.isNotBlank() && id > 0L)
-                        list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number, id))
+        if (!contactsLoading) {
+            contactsLoading = true
+            val generation = contactsGeneration.next()
+            providerExecutor.execute {
+                val list = mutableListOf<Contact>()
+                var failed = false
+                try {
+                    contentResolver.query(
+                        ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                        arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                            ContactsContract.CommonDataKinds.Phone.NUMBER,
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
+                        null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+                    )?.use { cursor ->
+                        while (cursor.moveToNext() && list.size < 1500) {
+                            val number = cursor.getString(1).orEmpty()
+                            val id = cursor.getLong(2)
+                            if (number.isNotBlank() && id > 0L)
+                                list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number, id))
+                        }
+                    }
+                } catch (_: RuntimeException) {
+                    // Provider unavailable, revoked permission or OEM provider
+                    // failure: keep the UI usable without exposing any PII.
+                    failed = true
+                }
+                runOnUiThread {
+                    if (!contactsGeneration.isCurrent(generation) || isFinishing || isDestroyed) return@runOnUiThread
+                    // Permissions can be revoked while the provider query runs.
+                    if (!allowed(Manifest.permission.READ_CONTACTS)) {
+                        contacts = emptyList()
+                        contactsFailed = false
+                    } else {
+                        contacts = list
+                        contactsFailed = failed
+                    }
+                    contactsLoading = false
+                    // Do not tear down a focused number editor while the user
+                    // is typing: the next edit refreshes the suggestion list.
+                    val typingNumber = screen == "keypad" && currentFocus is EditText
+                    if ((screen == "contacts" || screen == "keypad" || screen == "call") &&
+                        !typingNumber) render()
                 }
             }
-        } catch (_: SecurityException) {
-            // Revocation or policy denial: treat the data as unavailable.
-        } catch (_: IllegalArgumentException) {
-            // Provider differences are nonfatal; calls still work without contacts.
         }
-        contacts = list
-        return list
+        return emptyList()
+    }
+
+    private fun queryRecentCalls(): List<Recent> {
+        if (!allowed(Manifest.permission.READ_CALL_LOG)) return emptyList()
+        recentCalls?.let { return it }
+        if (!recentsLoading) {
+            recentsLoading = true
+            val generation = recentsGeneration.next()
+            providerExecutor.execute {
+                val list = mutableListOf<Recent>()
+                var failed = false
+                try {
+                    contentResolver.query(
+                        CallLog.Calls.CONTENT_URI,
+                        arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE,
+                            CallLog.Calls.DATE, CallLog.Calls.DURATION,
+                            CallLog.Calls.NUMBER_PRESENTATION),
+                        null, null, "${CallLog.Calls.DATE} DESC"
+                    )?.use { cursor ->
+                        while (cursor.moveToNext() && list.size < 150) {
+                            list.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
+                                cursor.getLong(2), cursor.getLong(3), cursor.getInt(4)))
+                        }
+                    }
+                } catch (_: RuntimeException) {
+                    failed = true
+                }
+                runOnUiThread {
+                    if (!recentsGeneration.isCurrent(generation) || isFinishing || isDestroyed) return@runOnUiThread
+                    if (!allowed(Manifest.permission.READ_CALL_LOG)) {
+                        recentCalls = emptyList()
+                        recentsFailed = false
+                    } else {
+                        recentCalls = list
+                        recentsFailed = failed
+                    }
+                    recentsLoading = false
+                    if (screen == "recents") render()
+                }
+            }
+        }
+        return emptyList()
     }
 
     private fun placeCall() {

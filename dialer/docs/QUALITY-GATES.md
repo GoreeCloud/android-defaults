@@ -39,9 +39,11 @@ to public issues, CI logs or screenshot artifacts.
 
 ## Further engineering risks
 
-- The current contact and call-log provider queries are capped and run synchronously.
-  Move them to a lifecycle-aware background worker before claiming performance
-  acceptance on large address books.
+- Contact and call-log provider reads are now serialized on a background
+  executor with bounded cursor scans and request-generation cancellation guards.
+  **Performance acceptance is still open**: the current emulator suite does not
+  inject slow/malformed providers or large data sets, and device jank has not
+  been measured. Query caches are in-memory and invalidated on Activity resume.
 - Optional Favorites use Android contact IDs. IDs may be reassigned after
   contact-provider migrations. The app retains only local IDs; its Settings
   screen can clear them. Verify migration behavior on real devices.
