@@ -53,6 +53,8 @@ class DialerActivity : Activity() {
     // frame. A single bounded worker serializes access and generations discard
     // callbacks from permission changes, Activity recreation, or stale reads.
     private val providerExecutor = BoundedProviderWorker()
+    /** Update only current keypad matches without tearing down a focused editor. */
+    private var refreshKeypadSuggestions: (() -> Unit)? = null
     private var contacts: List<Contact>? = null
     private var contactsLoading = false
     private var contactsFailed = false
@@ -173,6 +175,7 @@ class DialerActivity : Activity() {
     override fun onDestroy() {
         // Invalidate callbacks before stopping work; never post into a dead UI.
         invalidateProviderCaches()
+        refreshKeypadSuggestions = null
         providerExecutor.shutdownNow()
         super.onDestroy()
     }
@@ -224,6 +227,8 @@ class DialerActivity : Activity() {
             val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             if (showIncoming) window.addFlags(flags) else window.clearFlags(flags)
         }
+        // Do not retain closures pointing at detached views after navigation.
+        refreshKeypadSuggestions = null
         root.removeAllViews()
         val largeText = resources.configuration.fontScale >= 1.3f
         val header = column(if (largeText) 12 else 20).apply {
@@ -324,6 +329,9 @@ class DialerActivity : Activity() {
             override fun afterTextChanged(s: Editable?) {}
         })
         body.addView(suggestions)
+        refreshKeypadSuggestions = {
+            if (screen == "keypad" && suggestions.parent != null) updateMatches()
+        }
         updateMatches()
         val keys = listOf(
             listOf("1" to "", "2" to "ABC", "3" to "DEF"),
@@ -986,8 +994,12 @@ class DialerActivity : Activity() {
                     // Do not tear down a focused number editor while the user
                     // is typing: the next edit refreshes the suggestion list.
                     val typingNumber = screen == "keypad" && currentFocus is EditText
-                    if ((screen == "contacts" || screen == "keypad" || screen == "call") &&
-                        !typingNumber) render()
+                    val updateResults = if (typingNumber) refreshKeypadSuggestions else null
+                    if (updateResults != null) {
+                        updateResults()
+                    } else if (screen == "contacts" || screen == "keypad" || screen == "call") {
+                        render()
+                    }
                 }
             }
             if (!accepted) {

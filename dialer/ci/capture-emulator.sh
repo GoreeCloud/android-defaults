@@ -36,19 +36,41 @@ launch() {
 }
 
 ensure_rendered_keypad() {
-  for _ in {1..8}; do
+  # Each uiautomator dump may be delayed by cold-start animations. Capture
+  # the whole XML before inspecting it: grep -q + pipefail can incorrectly
+  # fail when adb cat receives SIGPIPE after an early grep match.
+  # Avoid restarting the app after every poll, which can repeatedly capture
+  # a splash instead of the actual Activity on slower Android 35 runners.
+  local attempt xml
+  for attempt in {1..12}; do
     adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-    if adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq 'Call a number' &&
-       adb shell cat /sdcard/window.xml 2>/dev/null | grep -Fq 'Place phone call'; then
+    xml="$(adb shell cat /sdcard/window.xml 2>/dev/null || true)"
+    if [[ "$xml" == *"Call a number"* && "$xml" == *"Place phone call"* ]]; then
       sleep 1
       return 0
     fi
-    # A Google APIs image occasionally overlays an unrelated crash popup.
-    adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
-    launch
+    # Android 35 Google APIs occasionally displays an unrelated Pixel Launcher
+    # ANR dialog *over a healthy Dialer*. Only dismiss that exact system-owned
+    # message on this disposable CI emulator, never any arbitrary UI prompt.
+    local tap_coords cx cy
+    tap_coords="$(printf '%s' "$xml" | python3 "$repo_root/dialer/ci/dismiss-launcher-anr.py" || true)"
+    if [[ "$tap_coords" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
+      read -r cx cy <<< "$tap_coords"
+      adb shell input tap "$cx" "$cy" >/dev/null 2>&1 || true
+      sleep 2
+      continue
+    fi
+    if (( attempt % 4 == 0 )); then
+      # Dismiss unrelated Google APIs image popups on this disposable emulator.
+      adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+      launch
+    fi
     sleep 2
   done
-  printf 'Dialer keypad was not visible in the Android accessibility tree.\n' >&2
+  # Keep synthetic visual failure evidence without silently counting it as
+  # an acceptance screenshot. No real contacts or call history in CI images.
+  adb exec-out screencap -p > "$screens/capture-failure-android-$api.png" || true
+  printf 'Dialer keypad and primary Call action never both appeared in Android accessibility tree.\n' >&2
   exit 1
 }
 

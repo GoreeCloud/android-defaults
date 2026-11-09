@@ -10,7 +10,13 @@ The pinned CI workflow at [Android Dialer CI](../../.github/workflows/dialer.yml
 - Android Lint, debug assembly, and packaged APK name/Internet-permission checks.
 - Non-exported notification action receiver, system-bound `InCallService`, no `INTERNET`, `READ_SMS`, or `WRITE_CALL_LOG` permission, and explicit cloud/device transfer exclusions.
 - Disposable Android 26, Android 35 and Android 36 emulator instrumentation: offline 4-tab navigation, `tel:` deeplink, package permissions, and local Favorites persistence/cleanup.
-- Emulator screenshot artifacts include the rendered default keypad and 1.5× Android system font-scale keypad on API 26/35/36, plus Android 35/36 system dark-mode keypads. The job verifies the keypad heading **and visible primary Call control** in Android's accessibility hierarchy before capture. At large font sizes, the Call action remains pinned above the floating dock while the dial keys scroll. Screenshots must be opened and reviewed before any visual-acceptance assertion.
+- Emulator screenshot artifacts include the rendered default keypad and 1.5× Android system font-scale keypad on API 26/35/36, plus Android 35/36 system dark-mode keypads. The job verifies the keypad heading **and visible primary Call control** in Android's accessibility hierarchy before capture. At large font sizes, the Call action remains pinned above the floating dock while the dial keys scroll. In CI-only testing, a Pixel Launcher ANR dialog sometimes overlays a
+  healthy Dialer on Android 35. The capture script now reads complete
+  accessibility XML (avoiding grep/pipefail false negatives), tolerates
+  slower startup, and may dismiss ONLY the exact Pixel Launcher ANR Close app
+  action on disposable emulators. Six Python tests prevent dismissing other
+  dialogs. A failed capture retains a diagnostic PNG rather than passing.
+  Screenshots must be opened and reviewed before any visual-acceptance assertion.
 
 **Limits:** These tests do not initiate cellular calls or emulate real OEM/telecom/carrier routing. A green CI run is not call-quality or emergency-readiness certification.
 
@@ -66,6 +72,11 @@ to public issues, CI logs or screenshot artifacts.
   **Performance acceptance is still open**: the current emulator suite does not
   inject slow/malformed providers or large data sets, and device jank has not
   been measured. Query caches are in-memory and invalidated on Activity resume.
+  When a Contacts read completes while the keypad editor has focus,
+  suggestions refresh in-place without replacing its EditText, cursor or
+  keyboard. The callback is cleared on each Activity render/destruction.
+  A synthetic ContactsProvider timing fixture is still required to establish
+  provider-completion-with-focus acceptance.
   Failed Contacts and Call Log queries now show explicit local-only Retry
   controls; each Retry cancels the old request and advances its generation
   guard. Regression coverage proves stale retry completions are rejected,

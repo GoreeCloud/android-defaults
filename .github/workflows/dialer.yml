@@ -163,7 +163,7 @@ jobs:
             gradle -p dialer :app:connectedDebugAndroidTest --no-daemon --stacktrace
             bash dialer/ci/capture-emulator.sh ${{ matrix.api }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: success()
+        if: always()
         with:
           name: goreecloud-dialer-android-${{ matrix.api }}-screens
           path: dialer/build/emulator-screenshots/**/*.png
