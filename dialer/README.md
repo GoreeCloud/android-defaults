@@ -31,10 +31,15 @@ The debug APK is `dialer/app/build/outputs/apk/debug/app-debug.apk`. It is a dev
   Android contact IDs are retained in app-private `SharedPreferences`; no copied
   phone numbers or names are stored for Favorites. You can clear the selection
   in Settings, and revoking Contacts permission prevents reading contact details.
-- **Audio routes**: Android 14+ now uses platform-provided `CallEndpoint` choices
+- **Audio routes**: Android 14+ uses platform-provided `CallEndpoint` choices
   and `requestCallEndpointChange()` with a failure callback. Android 8–13 uses
-  its supported legacy audio-routing APIs. Physical Bluetooth/earpiece switching
-  has not yet been validated.
+  supported legacy audio-routing APIs. Bluetooth/earpiece switching remains
+  unverified on physical phones.
+- **Multiple calls**: when Android Telecom reports support, the in-call UI offers
+  Add call, merge conference and swap conference. This does not force unsupported
+  carrier features, and those actions still require real dual-call tests.
+- **In-call keypad**: rapid DTMF key taps no longer schedule overlapping tone
+  stop callbacks; dismissal always stops any in-progress tone.
 - **Screenshot evidence**: Android emulator smoke tests may produce local-only
   blank-state screenshots for UI review. These are CI evidence, not user photos,
   phone data, product release files, or proof of visual acceptance.
