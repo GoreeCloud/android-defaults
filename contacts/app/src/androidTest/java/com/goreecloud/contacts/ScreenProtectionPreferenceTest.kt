@@ -53,22 +53,22 @@ class ScreenProtectionPreferenceTest {
             assertTrue(prefs.edit().remove("secure_screen_enabled").commit())
             ActivityScenario.launch(ContactsActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
-                    assertFalse(activity.window.attributes.flags and
-                        WindowManager.LayoutParams.FLAG_SECURE != 0)
+                    assertFalse((activity.window.attributes.flags and
+                        WindowManager.LayoutParams.FLAG_SECURE) != 0)
                 }
             }
             assertTrue(prefs.edit().putBoolean("secure_screen_enabled", true).commit())
             ActivityScenario.launch(ContactsActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
-                    assertTrue(activity.window.attributes.flags and
-                        WindowManager.LayoutParams.FLAG_SECURE != 0)
+                    assertTrue((activity.window.attributes.flags and
+                        WindowManager.LayoutParams.FLAG_SECURE) != 0)
                 }
             }
             assertTrue(prefs.edit().remove("secure_screen_enabled").commit())
             ActivityScenario.launch(ContactsActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
-                    assertFalse(activity.window.attributes.flags and
-                        WindowManager.LayoutParams.FLAG_SECURE != 0)
+                    assertFalse((activity.window.attributes.flags and
+                        WindowManager.LayoutParams.FLAG_SECURE) != 0)
                 }
             }
         } finally {
