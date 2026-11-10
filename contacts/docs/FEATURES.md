@@ -170,3 +170,6 @@ network request. The chosen mapping application may use the Internet and
 receives the address **only after the user's explicit action**. No background
 geocoding, telemetry or stored coordinates are introduced. External app
 availability and physical-device handoff acceptance remain unverified.
+The initial isolated implementation passed JVM tests, APK build, Lint and
+Android 26/35/36 emulator CI. Verification of the branch after rebasing onto
+the merged selective-sharing change is tracked independently in this PR.
