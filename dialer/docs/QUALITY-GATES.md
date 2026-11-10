@@ -77,6 +77,12 @@ to public issues, CI logs or screenshot artifacts.
   keyboard. The callback is cleared on each Activity render/destruction.
   A synthetic ContactsProvider timing fixture is still required to establish
   provider-completion-with-focus acceptance.
+  A null provider cursor is treated as a retryable read failure rather than
+  an empty contact list or empty call history. On provider exceptions during
+  cursor traversal, partial results are discarded before the error is shown.
+  The dedicated synthetic-provider fault/latency suite in issue #15 is STILL
+  required; source review and navigation smoke tests do not prove the rare
+  failure path against actual OEM provider behavior.
   Failed Contacts and Call Log queries now show explicit local-only Retry
   controls; each Retry cancels the old request and advances its generation
   guard. Regression coverage proves stale retry completions are rejected,
