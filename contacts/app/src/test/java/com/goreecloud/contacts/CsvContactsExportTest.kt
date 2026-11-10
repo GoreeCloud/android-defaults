@@ -23,11 +23,18 @@ class CsvContactsExportTest {
     @Test fun formulasAndInternationalNumbersAreTreatedAsLiteralText() {
         for (value in listOf("=2+2", "+12055550100", "-5+2", "@NOW()",
             "  =HYPERLINK(\"https://example.invalid\")",
-            "\t=SUM(1,1)", "\u200B=1+1", "\uFEFF+1")) {
+            "\t=SUM(1,1)", "\u200B=1+1", "\uFEFF+1",
+            "\u200C=HYPERLINK(1)", "\u200D+2", "\u200E=3",
+            "\u200F-4", "\u2060@NOW()", "\u2066=SUM(1,2)")) {
             val row = CsvContactsExport.row(ContactEntry(1, "x", value))
             assertTrue(row.startsWith("\"'"))
             assertTrue(row.endsWith("\"\r\n") || row.contains("\","))
         }
+    }
+
+    @Test fun harmlessFormatPrefixedTextIsNotModified() {
+        val row = CsvContactsExport.row(ContactEntry(1, "x", "\u2060Alice"))
+        assertTrue(row.startsWith("\"\u2060Alice\""))
     }
 
     @Test fun rejectsEmbeddedNulAndOverlongCell() {
