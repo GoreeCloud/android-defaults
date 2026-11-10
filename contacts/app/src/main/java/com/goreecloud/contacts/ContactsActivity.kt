@@ -649,10 +649,8 @@ class ContactsActivity : Activity() {
             " possible matches · Suggestions only; no records will be merged.",
             14f, R.color.muted).apply { setPadding(0, px(8), 0, px(10)) })
         clusters.take(15).forEach { cluster ->
-            duplicateCard.addView(action(cluster.joinToString(" / ") { it.name }) {
-                selectedContact = cluster.first().id
-                tab = "detail"
-                drawShell()
+            duplicateCard.addView(action(DuplicateCandidateReview.heading(cluster)) {
+                reviewDuplicateCandidates(cluster)
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = px(7) })
@@ -676,6 +674,25 @@ class ContactsActivity : Activity() {
         scroll.addView(container)
         body.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    }
+
+    /** Read-only candidate chooser; the user decides which profile to inspect. */
+    private fun reviewDuplicateCandidates(cluster: List<ContactEntry>) {
+        val choices = DuplicateCandidateReview.choices(cluster)
+        if (choices.isEmpty()) return
+        val title = if (cluster.size > choices.size)
+            "Review suggestions (" + choices.size + " of " + cluster.size + ")"
+        else "Review duplicate suggestions"
+        // Avoid mixing setMessage with setItems: OEM dialogs may not display both.
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(choices.map { it.title }.toTypedArray()) { _, index ->
+                selectedContact = choices[index].contactId
+                tab = "detail"
+                drawShell()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showDetail(data: DirectorySnapshot) {

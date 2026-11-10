@@ -18,7 +18,7 @@
 | Favorite/group-scoped exports | Implemented in source; CI pending | Explicit subset selection followed by existing export confirmations and SAF destination; no background transfers |
 | Limited CSV export | Implemented in source; per-commit CI required | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
 | Single vCard import preview | Source and API26/35/36 emulator CI passed in PR #24; OEM editor acceptance open | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
-| Duplicate review | Implemented in source | Suggestions only; no direct merge |
+| Duplicate review | Implemented in source | Read-only bounded candidate chooser opens any suggested profile; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
 | Postal addresses, birthdays, anniversaries, custom dates and notes | Implemented in source; note-privacy CI pending | Read-only bounded Android Data queries; notes hidden by default behind explicit secure dialog; excluded from share/export |
 | Read-only upcoming birthdays and anniversaries | Implemented in source; CI pending | Next 90 days, local calculations, no calendar writes, reminders or age inference |
@@ -221,3 +221,13 @@ tests cover oversized identity, phones, emails, organization and group names;
 phone/email/group limits and an exact-limit positive case. Limits protect
 reliability but may reject exotic OEM address books; pagination and streaming
 are still needed for production-scale coverage.
+
+**Review each duplicate candidate (this PR):** Selecting a potential
+duplicate cluster opens a non-destructive dialog showing up to twenty
+contact names, with no automatic choice of the first person. The user can
+open any listed candidate's existing profile. The dialog intentionally
+omits phone numbers, emails, organization, notes and other private fields;
+names are sanitized for control characters, and large clusters are
+explicitly capped. Pure JVM tests verify candidate identity, ordering,
+privacy omissions and limits. No Contacts Provider mutation, deletion,
+merging, telemetry, new permission or network operation is introduced.

@@ -11,7 +11,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - Accent-insensitive search of names, organizations and local details, including phone-digit matching across formatting; selectable name/organization/favorites-first sorting and with-phone/with-email filters; app-local favorites and read-only Android groups.
 - Profile cards with phone/email/organization and locally read formatted addresses, important dates and notes (private notes hidden until a secure, explicit reveal dialog); add/edit through Android system contact intents. A postal-address map handoff asks for explicit consent and uses a user-selected maps app without device-location access. Private extended details remain absent from the current share and export paths.
 - Call via ACTION_DIAL and compose SMS/email via installed apps; selectively share individual name/phone/email fields with none preselected, explicit payload preview and a recipient-app chooser. Private notes and addresses remain excluded.
-- Read-only duplicate suggestions by normalized phone/email.
+- Read-only duplicate suggestions by normalized phone/email, with a bounded candidate chooser to inspect each suggested profile without automatic merge.
 - Local upcoming birthday and anniversary overview (next 90 days), excluding custom one-off dates and with no background reminders or age inference.
 - User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
 - **Scoped export:** choose an individual profile, favorites or an existing Android group and export only those records as vCard or CSV after explicit confirmation.
