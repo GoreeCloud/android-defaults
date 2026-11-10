@@ -7,7 +7,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 ## Current source implementation
 
 - On-device Android Contacts Provider read with explicit READ_CONTACTS runtime consent. No contact data upload.
-- Search names, numbers, emails and organizations; alphabetized directory; app-local favorites; Android groups and membership filtering.
+- Accent-insensitive search of names, organizations and local details, including phone-digit matching across formatting; selectable name/organization/favorites-first sorting and with-phone/with-email filters; app-local favorites and read-only Android groups.
 - Profile cards with phone/email/organization and locally read formatted addresses, important dates and notes; add/edit through Android system contact intents. Private extended details remain absent from the current share and export paths.
 - Call via ACTION_DIAL, compose SMS/email via installed apps, share only after preview and explicit confirmation.
 - Read-only duplicate suggestions by normalized phone/email.

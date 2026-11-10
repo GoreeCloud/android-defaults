@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | Native Android directory | Implemented in source | Permission-gated background Contacts Provider reads |
 | Name, number, email and organization search | Implemented in source | Pure JVM matching tests |
+| Accent-insensitive and formatted-phone search; local sort/filter | Implemented in source; CI pending | Read-only view settings: name, organization or favorites-first; with-phone/with-email filters; session/restored-screen state only |
 | Favorites | Implemented in source | App-private preference, not system STARRED |
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
@@ -114,3 +115,12 @@ and vCard export. No new permissions, trackers, external lookup, write
 operations, birthday notifications or address-map transfers are introduced.
 This is not full-field export or recovery. Synthetic emulator tests and
 a real-OEM accessibility review remain mandatory.
+
+**Directory controls (this PR):** Offline searches normalize combining accent
+marks and allow phone-digit searches across punctuation and spaces. Sort by
+name, organization (unassigned last) or app-local favorites; filter to
+contacts with a phone or email. Favorite/group boundaries remain intact.
+Controls live only in the Activity saved state (no server, new permission or
+background transfer). Pure JVM tests cover Unicode names, multiple field
+terms, digit search, ordering and subset isolation. OEM accessibility and
+large-directory performance acceptance remain open.

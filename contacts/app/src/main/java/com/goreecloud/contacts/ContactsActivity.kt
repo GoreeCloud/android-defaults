@@ -43,6 +43,8 @@ class ContactsActivity : Activity() {
     private lateinit var body: LinearLayout
     private var tab = "people"
     private var query = ""
+    private var directorySort = DirectorySort.NAME
+    private var directoryFilter = DirectoryFilter.ALL
     private var selectedGroup: Long? = null
     private var selectedContact: Long? = null
     private var snapshot: DirectorySnapshot? = null
@@ -66,6 +68,12 @@ class ContactsActivity : Activity() {
             it in listOf("people", "favorites", "groups", "tools", "detail")
         } ?: "people"
         query = savedInstanceState?.getString("query").orEmpty()
+        directorySort = savedInstanceState?.getString("directorySort")?.let {
+            runCatching { DirectorySort.valueOf(it) }.getOrNull()
+        } ?: DirectorySort.NAME
+        directoryFilter = savedInstanceState?.getString("directoryFilter")?.let {
+            runCatching { DirectoryFilter.valueOf(it) }.getOrNull()
+        } ?: DirectoryFilter.ALL
         selectedGroup = savedInstanceState?.getLong("group", -1L)?.takeIf { it >= 0L }
         selectedContact = savedInstanceState?.getLong("contact", -1L)?.takeIf { it >= 0L }
         root = LinearLayout(this).apply {
@@ -101,6 +109,8 @@ class ContactsActivity : Activity() {
     override fun onSaveInstanceState(state: Bundle) {
         state.putString("tab", tab)
         state.putString("query", query)
+        state.putString("directorySort", directorySort.name)
+        state.putString("directoryFilter", directoryFilter.name)
         state.putLong("group", selectedGroup ?: -1L)
         state.putLong("contact", selectedContact ?: -1L)
         super.onSaveInstanceState(state)
@@ -361,11 +371,34 @@ class ContactsActivity : Activity() {
     }
 
     private fun filtered(data: DirectorySnapshot): List<ContactEntry> =
-        data.contacts.filter { c ->
-            (tab != "favorites" || favoriteKey(c) in favoriteKeys()) &&
-                (selectedGroup == null || selectedGroup in c.groupIds) &&
-                ContactLogic.matches(c, query)
-        }
+        DirectoryControls.directory(data.contacts, query, favoriteKeys(),
+            tab == "favorites", selectedGroup, directorySort, directoryFilter)
+
+    private fun chooseDirectorySort() {
+        val values = DirectorySort.entries
+        AlertDialog.Builder(this)
+            .setTitle("Sort contact directory")
+            .setSingleChoiceItems(values.map { it.title }.toTypedArray(),
+                directorySort.ordinal) { dialog, selected ->
+                directorySort = values[selected]
+                dialog.dismiss()
+                drawBody()
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun chooseDirectoryFilter() {
+        val values = DirectoryFilter.entries
+        AlertDialog.Builder(this)
+            .setTitle("Show contacts")
+            .setSingleChoiceItems(values.map { it.title }.toTypedArray(),
+                directoryFilter.ordinal) { dialog, selected ->
+                directoryFilter = values[selected]
+                dialog.dismiss()
+                drawBody()
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
 
     private fun showPeople(data: DirectorySnapshot) {
         val items = filtered(data)
@@ -380,6 +413,18 @@ class ContactsActivity : Activity() {
         fillWidth(section, 3)
         fillWidth(label(items.size.toString() + " contacts", 14f, R.color.muted)
             .apply { setPadding(px(6), 0, 0, px(6)) }, 4)
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        controls.addView(action("Sort: " + directorySort.title) {
+            chooseDirectorySort()
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(action("Show: " + directoryFilter.title) {
+            chooseDirectoryFilter()
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            .apply { leftMargin = px(8) })
+        fillWidth(controls, 10)
         if (selectedGroup != null) {
             fillWidth(action("Show all contacts") {
                 selectedGroup = null
