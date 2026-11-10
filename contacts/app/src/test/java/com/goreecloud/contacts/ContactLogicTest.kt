@@ -57,6 +57,36 @@ class ContactLogicTest {
         assertTrue(bytes > 0)
     }
 
+    @Test fun vCardExportRefusesDirectionalSpoofingInEveryFieldBeforeDocumentWrite() {
+        val controls = listOf(0x061C, 0x200E, 0x200F, 0x2028, 0x2029,
+            0x202A, 0x202E, 0x2066, 0x2069)
+        for (code in controls) {
+            val marker = String(Character.toChars(code))
+            val cases = listOf(
+                ContactEntry(1L, "synthetic", "QA" + marker + "Name"),
+                ContactEntry(2L, "synthetic", "QA", phones = listOf("+1205555" + marker + "0100")),
+                ContactEntry(3L, "synthetic", "QA", emails = listOf("qa" + marker + "@example.invalid")),
+                ContactEntry(4L, "synthetic", "QA", organization = "Company" + marker + "QA")
+            )
+            for (person in cases) {
+                try {
+                    ContactLogic.validateExport(listOf(person))
+                    fail("Spoofable Unicode must be rejected before selecting a destination")
+                } catch (_: IllegalArgumentException) { }
+                try {
+                    ContactLogic.vCard(person)
+                    fail("Spoofable Unicode must be rejected before vCard creation")
+                } catch (_: IllegalArgumentException) { }
+            }
+        }
+        val normal = ContactEntry(5L, "safe", "محمد Renée 🪻",
+            phones = listOf("+12055550100"), organization = "会社")
+        val card = ContactLogic.vCard(normal)
+        assertTrue(card.contains("محمد"))
+        assertTrue(card.contains("Renée"))
+        assertEquals(ContactLogic.validateExport(listOf(normal)), card.toByteArray(Charsets.UTF_8).size)
+    }
+
     @Test fun vCardRejectsEmbeddedControlCharacters() {
         val contact = ContactEntry(2L, "key", "No\u0000Name")
         try {
