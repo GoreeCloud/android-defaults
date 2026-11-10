@@ -12,8 +12,8 @@
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
 | Contact sharing | Implemented in source | Text preview and user-selected recipient |
 | Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
-| Limited CSV export | Implemented in source; CI pending | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
-| Single vCard import preview | Implemented in source; CI pending | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
+| Limited CSV export | Implemented in source; per-commit CI required | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
+| Single vCard import preview | Source and API26/35/36 emulator CI passed in PR #24; OEM editor acceptance open | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
 | Rich data fields, photos, posters, birthdays | Planned | Android provider/UI support and privacy review |
@@ -26,7 +26,7 @@
 
 GoreeShield governs privacy; Wardveil cybersecurity; GoreeCloud Mesh integrations; GoreeCloud Identity access control; GoreeCloud UI interface design.
 
-**Synthetic Android-provider safety gates (source implementation; CI pending):**
+**Synthetic Android-provider safety gates (CI-backed source, OEM acceptance open):**
 The ContactsRepository now treats a missing/null cursor, missing required column,
 upstream exception, canceled request or over-budget directory as a **failed entire
 snapshot** rather than publishing partial or falsely empty contacts. A bounded
@@ -56,11 +56,11 @@ refuses non-emulators, clears only the disposable emulator's Contacts app, and
 does not grant permissions or read real contacts. UI hierarchy visibility is
 checked before each screenshot; diagnostics on failure are not acceptance.
 Screenshot review, TalkBack, dynamic type beyond 1.5×, RTL, tablet/landscape,
-and genuine OEM use remain independent quality gates. Initial CI pending.
+and genuine OEM use remain independent quality gates. The API 26/35/36 workflow matrix runs on disposable emulators; a green run does not constitute visual or physical-device acceptance.
 
 **Quality gates:** No network/write/SMS/call permissions; explicit sharing and export; pure JVM tests; packaged APK/lint; disposable emulator smoke. Real OEM provider, physical device, accessibility, visual acceptance, release and sync remain unverified.
 
-**Limited vCard import path (new, CI pending):** File selection uses the
+**Limited vCard import path (CI-tested in PR #24; OEM editor validation open):** File selection uses the
 system document picker. An application-worker bounded reader accepts at most
 128 KiB of strict UTF-8 (vCard 3.0 or 4.0) and **exactly one card**. A pure
 parser rejects malformed or unknown-encoding supported fields, excessively long
