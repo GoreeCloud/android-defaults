@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "dialer/**"
+      - "ci/**"
       - ".github/workflows/dialer.yml"
       - "LICENSE"
       - "README.md"
@@ -10,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "dialer/**"
+      - "ci/**"
       - ".github/workflows/dialer.yml"
 
 permissions:
@@ -99,6 +101,10 @@ jobs:
       - name: Test read-only Android device preflight with synthetic ADB
         run: |
           bash -n dialer/ci/device-preflight.sh
+          bash -n dialer/ci/capture-emulator.sh
+          bash -n ci/emulator-only.sh
+          bash -n ci/test-emulator-only.sh
+          bash ci/test-emulator-only.sh
           python3 -m unittest discover -s dialer/ci/tests -p 'test_*.py' -v
       - name: Kotlin tests, APK build, Android lint
         working-directory: dialer
