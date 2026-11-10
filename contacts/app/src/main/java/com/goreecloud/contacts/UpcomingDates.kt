@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.MonthDay
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.PriorityQueue
 
 /** Pure local-only recurrence list. This does not schedule notifications or read calendars. */
 data class UpcomingDate(
@@ -67,26 +68,33 @@ object UpcomingDates {
         require(horizonDays in 1..366 && maxResults in 1..50) {
             "Invalid upcoming-date view bounds"
         }
-        val events = mutableListOf<UpcomingDate>()
+        val ordering = compareBy<UpcomingDate> { it.nextDate }
+            .thenBy { it.contactName.lowercase(Locale.ROOT) }
+            .thenBy { it.contactId }
+        // A worst-first heap retains at most maxResults candidates rather than
+        // allocating and sorting every event in a 10,000-contact snapshot.
+        val top = PriorityQueue<UpcomingDate>(maxResults + 1, ordering.reversed())
         contacts.forEach { contact ->
-            contact.importantDates.forEach { event ->
+            contact.importantDates.forEach eventLoop@{ event ->
                 // Arbitrary custom dates may be one-time events: do not invent recurrence.
-                if (event.label != "Birthday" && event.label != "Anniversary") return@forEach
-                val monthDay = monthDay(event.value) ?: return@forEach
-                val next = nextOccurrence(monthDay, today) ?: return@forEach
+                if (event.label != "Birthday" && event.label != "Anniversary")
+                    return@eventLoop
+                val monthDay = monthDay(event.value) ?: return@eventLoop
+                val next = nextOccurrence(monthDay, today) ?: return@eventLoop
                 val remaining = ChronoUnit.DAYS.between(today, next)
                 if (remaining in 0..horizonDays.toLong()) {
-                    events.add(UpcomingDate(
+                    val candidate = UpcomingDate(
                         contactId = contact.id, contactName = contact.name,
                         kind = event.label, nextDate = next, daysUntil = remaining
-                    ))
+                    )
+                    if (top.size < maxResults) top.add(candidate)
+                    else if (ordering.compare(candidate, top.peek()) < 0) {
+                        top.poll()
+                        top.add(candidate)
+                    }
                 }
             }
         }
-        return events.sortedWith(
-            compareBy<UpcomingDate> { it.nextDate }
-                .thenBy { it.contactName.lowercase(Locale.ROOT) }
-                .thenBy { it.contactId }
-        ).take(maxResults)
+        return top.toList().sortedWith(ordering)
     }
 }

@@ -67,4 +67,30 @@ class UpcomingDatesTest {
             fail("Unbounded results accepted")
         } catch (_: IllegalArgumentException) {}
     }
+    @Test fun boundedHeapReturnsSameTopCandidatesFromLargeSyntheticDirectory() {
+        val today = LocalDate.of(2026, 11, 9)
+        val contacts = (1L..5000L).map { id ->
+            val day = (id % 30L + 1L).toInt()
+            contact(id, "Birthday", "--11-" + day.toString().padStart(2, '0'))
+        }
+        val selected = UpcomingDates.list(contacts, today, horizonDays = 90, maxResults = 12)
+        assertEquals(12, selected.size)
+        assertTrue(selected.zipWithNext().all { (a, b) ->
+            a.nextDate.isBefore(b.nextDate) || a.nextDate == b.nextDate
+        })
+        assertTrue(selected.all { it.daysUntil in 0..90L })
+    }
+
+    @Test fun topOneSelectionKeepsEarliestDateRegardlessOfInputOrder() {
+        val items = listOf(
+            contact(1, "Birthday", "--12-01"),
+            contact(2, "Birthday", "--11-09"),
+            contact(3, "Anniversary", "--11-20")
+        )
+        val result = UpcomingDates.list(items, LocalDate.of(2026, 11, 9),
+            maxResults = 1)
+        assertEquals(2L, result.single().contactId)
+    }
+
+
 }
