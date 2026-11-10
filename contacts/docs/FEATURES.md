@@ -87,3 +87,17 @@ read-only and requires choosing a format, reviewing the export confirmation
 and selecting the destination provider. Empty selections are refused. Neither
 workflow expands vCard/CSV field fidelity, gains group-write permissions nor
 changes server synchronization or recovery behavior.
+
+**CI screenshot readiness hardening (under verification):** The isolated
+API 26/35/36 emulator capture helper now wakes the disposable emulator,
+requests keyguard dismissal without clicking dialogs or granting Contacts,
+waits for explicit ActivityManager launch completion, and makes a bounded
+20-attempt UI hierarchy check. On failure it captures a diagnostic image and
+limited foreground-process information, but does not dump personal contacts.
+A captured Android 35 failure screenshot from run 42736882461 confirmed a
+system **Pixel Launcher isn't responding** overlay on top of a correctly
+rendered GoreeCloud Contacts permission screen. For precisely this system-app
+ANR, the CI-only script now attempts one bounded force-stop/relaunch of Pixel
+Launcher before continuing. This is a diagnostic/recovery measure, **not
+proof** that all Android 35 startup failures are fixed. See issue #26; reruns,
+visual inspection and OEM acceptance remain open.

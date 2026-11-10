@@ -31,26 +31,51 @@ adb install -r contacts/app/build/outputs/apk/debug/app-debug.apk >/dev/null
 # Ensure screenshots contain NO personal/synthetic contacts, even when
 # instrumentation previously exercised test-only in-memory provider records.
 adb shell pm clear com.goreecloud.contacts >/dev/null
+# A freshly booted disposable emulator may still be locked or asleep.
+# These actions do not grant permissions, interact with contacts, or click UI dialogs.
+adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 
 launch() {
-  adb shell am start -S -f 0x10008000 -n \
+  adb shell am start -W -S -f 0x10008000 -n \
     com.goreecloud.contacts/.ContactsActivity >/dev/null
 }
 
 ready() {
   local xml
-  for attempt in {1..12}; do
+  local launcher_recovered=0
+  # Bounded retries: uiautomator may momentarily expose a system startup overlay.
+  for attempt in {1..20}; do
     adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
     xml="$(adb shell cat /sdcard/window.xml 2>/dev/null || true)"
     if [[ "$xml" == *"Your people"* && "$xml" == *"Your contacts stay yours"* ]]; then
       sleep 1
       return 0
     fi
+    # The Android 35 diagnostic screenshot from run 42736882461 showed
+    # "Pixel Launcher isn't responding" over our correctly rendered app.
+    # Recover this *specific* emulator system-app ANR once; never click ANR
+    # dialogs, grant READ_CONTACTS, clear accounts or touch a real handset.
+    if [[ "$launcher_recovered" -eq 0 &&
+          "$xml" == *"Pixel Launcher isn't responding"* ]]; then
+      launcher_recovered=1
+      printf 'Detected synthetic Pixel Launcher ANR overlay; restarting emulator launcher once.\n' >&2
+      if adb shell pm path com.google.android.apps.nexuslauncher >/dev/null 2>&1; then
+        adb shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
+        sleep 3
+        launch
+      fi
+    fi
     # No arbitrary dialog clicks or permissions may be granted in CI.
     sleep 2
   done
+  # Leave useful, privacy-safe diagnostics; never dump raw contact details or grant access.
+  printf 'Contacts foreground probe (disposable emulator only):\n' >&2
+  adb shell pidof com.goreecloud.contacts >&2 || true
+  adb shell dumpsys activity activities 2>/dev/null | \
+    grep -E "mResumedActivity|topResumedActivity|com.goreecloud.contacts" | head -n 8 >&2 || true
   adb exec-out screencap -p > "$screens/diagnostic-android-$api.png" || true
-  printf 'Synthetic empty-state Contacts gate was not visible.\n' >&2
+  printf 'Synthetic empty-state Contacts gate not confirmed after 20 attempts.\n' >&2
   exit 1
 }
 
