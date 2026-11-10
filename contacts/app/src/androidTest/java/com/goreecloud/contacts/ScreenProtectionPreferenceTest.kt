@@ -1,6 +1,8 @@
 package com.goreecloud.contacts
 
 import android.content.Context
+import android.view.WindowManager
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertFalse
@@ -29,4 +31,39 @@ class ScreenProtectionPreferenceTest {
             context.deleteSharedPreferences(file)
         }
     }
+
+    @Test fun activityWindowFollowsOptInPreferenceAcrossRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("screen_privacy_local", Context.MODE_PRIVATE)
+        val key = "secure_screen_enabled"
+        val priorExists = prefs.contains(key)
+        val priorValue = prefs.getBoolean(key, false)
+        try {
+            // Exercise only app-private synthetic preferences, not the Contacts provider.
+            assertTrue(prefs.edit().remove(key).commit())
+            ActivityScenario.launch(ContactsActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    assertFalse((activity.window.attributes.flags and
+                        WindowManager.LayoutParams.FLAG_SECURE) != 0)
+                }
+                assertTrue(prefs.edit().putBoolean(key, true).commit())
+                scenario.recreate()
+                scenario.onActivity { activity ->
+                    assertTrue((activity.window.attributes.flags and
+                        WindowManager.LayoutParams.FLAG_SECURE) != 0)
+                }
+                assertTrue(prefs.edit().remove(key).commit())
+                scenario.recreate()
+                scenario.onActivity { activity ->
+                    assertFalse((activity.window.attributes.flags and
+                        WindowManager.LayoutParams.FLAG_SECURE) != 0)
+                }
+            }
+        } finally {
+            val editor = prefs.edit()
+            if (priorExists) editor.putBoolean(key, priorValue) else editor.remove(key)
+            editor.commit()
+        }
+    }
+
 }
