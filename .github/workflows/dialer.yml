@@ -14,6 +14,14 @@ on:
       - "ci/**"
       - ".github/workflows/dialer.yml"
 
+
+# Bound hosted-emulator cost: superseded revisions of a PR should not keep
+# running the same suite. Other pull requests and other product workflows
+# receive distinct groups and cannot cancel one another.
+concurrency:
+  group: goreecloud-android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
