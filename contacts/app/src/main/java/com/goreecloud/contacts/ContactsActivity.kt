@@ -105,6 +105,7 @@ class ContactsActivity : Activity() {
         if (::root.isInitialized) {
             if (hasAccess()) refresh() else {
                 invalidate()
+                pendingExport = null // Revocation invalidates an awaiting picker snapshot.
                 snapshot = null
                 drawBody()
             }
@@ -127,6 +128,7 @@ class ContactsActivity : Activity() {
         if (requestCode == permissionCode) {
             if (hasAccess()) refresh() else {
                 invalidate()
+                pendingExport = null // Revocation invalidates an awaiting picker snapshot.
                 snapshot = null
                 drawBody()
             }
@@ -136,6 +138,7 @@ class ContactsActivity : Activity() {
     override fun onDestroy() {
         destroyed = true
         invalidate()
+        pendingExport = null
         worker.shutdownNow()
         super.onDestroy()
     }
@@ -1183,7 +1186,12 @@ class ContactsActivity : Activity() {
         val requested = pendingExport
         pendingExport = null
         val destination = data?.data
-        if (resultCode != RESULT_OK || destination == null || requested == null) return
+        // A document picker selection is not a substitute for live Contacts access.
+        if (!ContactExportAuthorization.mayStart(
+                readContactsGranted = hasAccess(),
+                pickerConfirmed = resultCode == RESULT_OK && destination != null,
+                selectedSnapshotPresent = !requested.isNullOrEmpty()
+            ) || destination == null || requested == null) return
         try {
             worker.execute {
                 val success = try {
@@ -1193,6 +1201,8 @@ class ContactsActivity : Activity() {
                     val csv = requestCode == csvExportCode
                     if (csv) CsvContactsExport.validate(requested)
                     else ContactLogic.validateExport(requested)
+                    // The queued worker may start after permission was revoked.
+                    if (!hasAccess()) throw SecurityException("Contacts permission revoked")
                     val stream = contentResolver.openOutputStream(destination, "wt")
                         ?: throw IllegalStateException("Document cannot be opened")
                     OutputStreamWriter(stream, Charsets.UTF_8).use { writer ->
