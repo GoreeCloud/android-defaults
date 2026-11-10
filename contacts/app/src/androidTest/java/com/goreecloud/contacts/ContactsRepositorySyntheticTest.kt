@@ -203,4 +203,49 @@ class ContactsRepositorySyntheticTest {
     }
 
 
+    @Test fun oversizedIdentityOrCommunicationFieldRejectsEntireSnapshot() {
+        val huge = "x".repeat(ContactsRepository.MAX_INLINE_FIELD_CHARS + 1)
+        val base = listOf(arrayOf<Any?>(11L, "lookup-a", "Alice"))
+        val scenarios: List<Map<String, List<Array<Any?>>>> = listOf(
+            mapOf("contacts" to listOf(arrayOf<Any?>(11L, "lookup-a", huge))),
+            mapOf("contacts" to listOf(arrayOf<Any?>(11L, huge, "Alice"))),
+            mapOf("contacts" to base, "phones" to listOf(arrayOf<Any?>(11L, huge))),
+            mapOf("contacts" to base, "emails" to listOf(arrayOf<Any?>(11L, huge))),
+            mapOf("contacts" to base, "organizations" to listOf(arrayOf<Any?>(11L, huge))),
+            mapOf("contacts" to base, "groups" to listOf(arrayOf<Any?>(1L, huge)))
+        )
+        scenarios.forEach { rows ->
+            fails { repository(rows).load(CancellationSignal()) }
+        }
+    }
+
+    @Test fun perContactPhoneEmailAndGroupCapsRejectTruncation() {
+        val base = listOf(arrayOf<Any?>(11L, "lookup-a", "Alice"))
+        val n = ContactsRepository.MAX_CHANNELS_PER_CONTACT + 1
+        val phones = (0 until n).map {
+            arrayOf<Any?>(11L, "555" + it.toString().padStart(4, '0'))
+        }
+        val emails = (0 until n).map {
+            arrayOf<Any?>(11L, "person" + it + "@example.invalid")
+        }
+        fails { repository(mapOf("contacts" to base, "phones" to phones)).load(CancellationSignal()) }
+        fails { repository(mapOf("contacts" to base, "emails" to emails)).load(CancellationSignal()) }
+        val groups = (1..ContactsRepository.MAX_GROUPS_PER_CONTACT + 1)
+            .map { arrayOf<Any?>(11L, it.toLong()) }
+        fails { repository(mapOf("contacts" to base, "memberships" to groups))
+            .load(CancellationSignal()) }
+    }
+
+    @Test fun exactPerContactChannelLimitIsAccepted() {
+        val n = ContactsRepository.MAX_CHANNELS_PER_CONTACT
+        val snap = repository(mapOf(
+            "contacts" to listOf(arrayOf<Any?>(11L, "lookup-a", "Alice")),
+            "phones" to (0 until n).map {
+                arrayOf<Any?>(11L, "555" + it.toString().padStart(4, '0'))
+            }
+        )).load(CancellationSignal())
+        assertEquals(n, snap.contacts.single().phones.size)
+    }
+
+
 }

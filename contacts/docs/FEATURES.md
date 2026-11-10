@@ -209,3 +209,15 @@ limits and deterministic ordering. The upcoming-date implementation passed
 its initial branch CI; the rebased-head CI still requires verification before
 merge. Real provider/OEM date formatting and screen-reader review remain
 release gates.
+
+**Per-field provider safety budgets (this PR):** The read-only Android
+adapter enforces a 4,096-character maximum on display names, lookup keys,
+phone numbers, emails, organization names and group titles, 100 unique
+phones or emails per aggregated contact, and 256 distinct group memberships
+per contact. Existing per-query 60,000-row budgets and extended-data caps
+remain. Exceeding a budget discards the **entire** snapshot rather than
+silently truncating or publishing incomplete contacts. Synthetic MatrixCursor
+tests cover oversized identity, phones, emails, organization and group names;
+phone/email/group limits and an exact-limit positive case. Limits protect
+reliability but may reject exotic OEM address books; pagination and streaming
+are still needed for production-scale coverage.
