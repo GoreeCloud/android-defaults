@@ -23,7 +23,8 @@ USE_PATTERN = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
 def verify(workflows: Path) -> list[str]:
     if not workflows.is_dir():
         raise ValueError("Missing Android Defaults workflow directory")
-    found = sorted(path.name for path in workflows.glob("*.yml"))
+    found = sorted(path.name for path in workflows.iterdir()
+                   if path.is_file() and path.suffix in {".yml", ".yaml"})
     if sorted(WORKFLOWS) != found:
         raise ValueError("Unexpected or missing Android Defaults workflow files")
     for filename in WORKFLOWS:
