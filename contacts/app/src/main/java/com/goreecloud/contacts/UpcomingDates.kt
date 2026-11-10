@@ -73,7 +73,16 @@ object UpcomingDates {
             .thenBy { it.contactId }
         // A worst-first heap retains at most maxResults candidates rather than
         // allocating and sorting every event in a 10,000-contact snapshot.
-        val top = PriorityQueue<UpcomingDate>(maxResults + 1, ordering.reversed())
+        // The old full-list sort was stable on equal date/name/contact ID.
+        // Preserve source arrival order in those rare ties, without allocating
+        // the full event list or changing the public result shape.
+        data class Ranked(val date: UpcomingDate, val arrival: Long)
+        val stable = Comparator<Ranked> { left, right ->
+            val rank = ordering.compare(left.date, right.date)
+            if (rank != 0) rank else left.arrival.compareTo(right.arrival)
+        }
+        val top = PriorityQueue<Ranked>(maxResults + 1, stable.reversed())
+        var arrival = 0L
         contacts.forEach { contact ->
             contact.importantDates.forEach eventLoop@{ event ->
                 // Arbitrary custom dates may be one-time events: do not invent recurrence.
@@ -87,14 +96,15 @@ object UpcomingDates {
                         contactId = contact.id, contactName = contact.name,
                         kind = event.label, nextDate = next, daysUntil = remaining
                     )
-                    if (top.size < maxResults) top.add(candidate)
-                    else if (ordering.compare(candidate, top.peek()) < 0) {
+                    val ranked = Ranked(candidate, arrival++)
+                    if (top.size < maxResults) top.add(ranked)
+                    else if (stable.compare(ranked, top.peek()) < 0) {
                         top.poll()
-                        top.add(candidate)
+                        top.add(ranked)
                     }
                 }
             }
         }
-        return top.toList().sortedWith(ordering)
+        return top.toList().sortedWith(stable).map { it.date }
     }
 }
