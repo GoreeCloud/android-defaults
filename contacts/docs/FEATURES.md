@@ -49,8 +49,14 @@ report cancellation only as its final cursor is exhausted or closed: the
 repository now rechecks cancellation at both boundaries and refuses a
 completed-looking snapshot. Synthetic instrumentation also rejects duplicated,
 zero or negative provider contact IDs rather than silently overwriting one
-record with another. These checks cannot force an uncooperative OEM provider
-to finish or prove performance on physical devices.
+record with another. Disposable API26/35/36 instrumentation now also constructs
+5,000- and 10,000-entry synthetic-only Contacts Provider cursors, verifies no
+rows are silently lost or duplicated, logs *only* row counts and monotonic
+traversal time, and rejects 10,001 entries at the documented 10,000-contact
+limit. These tests are a reproducible provider-memory/integrity baseline,
+**not** a recycled UI-row benchmark, strict latency SLA, a full populated-device
+stress test or a solution to OEM query hangs. They cannot force an uncooperative
+OEM provider to finish or prove performance on physical devices.
 
 **Export safety:** The selected destination is opened only after a full
 read-only in-memory preflight of every vCard. Pending export snapshots are now

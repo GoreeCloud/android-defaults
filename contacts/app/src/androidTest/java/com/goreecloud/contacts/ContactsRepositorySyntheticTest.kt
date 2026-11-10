@@ -6,6 +6,8 @@ import android.database.MatrixCursor
 import android.net.Uri
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
+import android.os.SystemClock
+import android.util.Log
 import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -253,6 +255,44 @@ class ContactsRepositorySyntheticTest {
             .map { arrayOf<Any?>(11L, it.toLong()) }
         fails { repository(mapOf("contacts" to base, "memberships" to groups))
             .load(CancellationSignal()) }
+    }
+
+    /**
+     * Captures a reproducible 5k/10k provider traversal baseline on a disposable
+     * emulator. There is deliberately no brittle wall-clock pass/fail threshold:
+     * this does not measure RecyclerView recycling, UI jank or OEM provider time.
+     */
+    @Test fun fiveAndTenThousandSyntheticRecordsRemainCompleteAndBounded() {
+        for (count in listOf(5000, 10000)) {
+            val contacts = ArrayList<Array<Any?>>(count)
+            for (id in 1..count) {
+                contacts.add(arrayOf<Any?>(
+                    id.toLong(), "fixture-key-$id", "Synthetic fixture $id"
+                ))
+            }
+            val started = SystemClock.elapsedRealtime()
+            val result = repository(
+                rows = mapOf("contacts" to contacts),
+                maxContacts = 10000
+            ).load(CancellationSignal())
+            val elapsed = SystemClock.elapsedRealtime() - started
+            assertEquals(count, result.contacts.size)
+            assertEquals(count, result.contacts.map { it.id }.toSet().size)
+            assertTrue(result.contacts.all { it.phones.isEmpty() && it.notes.isEmpty() })
+            assertTrue(elapsed >= 0L)
+            // Safe public CI signal: synthetic row count and monotonic duration only.
+            Log.i("GoreeCloudSyntheticContactsQA", "rows=$count elapsedMs=$elapsed")
+        }
+    }
+
+    @Test fun tenThousandAndOneSyntheticRecordsCannotSilentlyTruncate() {
+        val contacts = (1..10001).map { id ->
+            arrayOf<Any?>(id.toLong(), "fixture-key-$id", "Synthetic fixture $id")
+        }
+        fails {
+            repository(rows = mapOf("contacts" to contacts), maxContacts = 10000)
+                .load(CancellationSignal())
+        }
     }
 
     @Test fun exactPerContactChannelLimitIsAccepted() {
