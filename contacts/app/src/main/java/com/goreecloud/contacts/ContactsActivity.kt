@@ -649,6 +649,35 @@ class ContactsActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
 
+        if (c.addresses.isNotEmpty() || c.importantDates.isNotEmpty() ||
+            c.notes.isNotEmpty()) {
+            val extended = card()
+            extended.addView(label("More contact information", 19f, R.color.ink, true)
+                .apply { setPadding(0, 0, 0, px(12)) })
+            c.addresses.forEach { address ->
+                extended.addView(label("Address", 12f, R.color.muted, true))
+                extended.addView(label(address, 15f, R.color.ink).apply {
+                    setPadding(0, px(3), 0, px(14))
+                })
+            }
+            c.importantDates.forEach { date ->
+                extended.addView(label(date.label, 12f, R.color.muted, true))
+                extended.addView(label(date.value, 15f, R.color.ink).apply {
+                    setPadding(0, px(3), 0, px(14))
+                })
+            }
+            c.notes.forEach { note ->
+                extended.addView(label("Note (private)", 12f, R.color.muted, true))
+                extended.addView(label(note, 15f, R.color.ink).apply {
+                    setPadding(0, px(3), 0, px(14))
+                })
+            }
+            content.addView(extended, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = px(12) })
+        }
+
         val management = card()
         management.addView(label("Manage this contact", 19f, R.color.ink, true))
         management.addView(label("Android's editor confirms any changes before saving.",

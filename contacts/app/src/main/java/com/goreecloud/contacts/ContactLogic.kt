@@ -10,8 +10,13 @@ data class ContactEntry(
     val phones: List<String> = emptyList(),
     val emails: List<String> = emptyList(),
     val organization: String = "",
-    val groupIds: Set<Long> = emptySet()
+    val groupIds: Set<Long> = emptySet(),
+    val addresses: List<String> = emptyList(),
+    val importantDates: List<ImportantDate> = emptyList(),
+    val notes: List<String> = emptyList()
 )
+
+data class ImportantDate(val label: String, val value: String)
 
 data class GroupEntry(val id: Long, val name: String)
 data class DirectorySnapshot(val contacts: List<ContactEntry>, val groups: List<GroupEntry>)
@@ -32,6 +37,8 @@ object ContactLogic {
             .filter { it.isNotBlank() }
         val text = listOf(contact.name, contact.organization)
             .plus(contact.phones).plus(contact.emails)
+            .plus(contact.addresses).plus(contact.importantDates.map { it.label + " " + it.value })
+            .plus(contact.notes)
             .joinToString(" ").lowercase(Locale.ROOT)
         return terms.all { text.contains(it) }
     }
