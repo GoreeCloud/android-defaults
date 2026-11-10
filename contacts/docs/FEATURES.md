@@ -181,8 +181,11 @@ format validation remain open.
 profile, the user can select individual name, telephone or email fields to
 share. **Nothing is preselected**; only the affirmative selections appear in
 an exact second-stage preview before the system recipient chooser. The
-share payload removes control-character line breaks and refuses malformed or
-oversized values. Organization, private notes, addresses, dates, account
+share payload removes control-character line breaks and refuses malformed,
+oversized or Unicode bidi-formatting-controlled **selected** values before the
+second-stage share preview. Valid international text and emoji remain intact;
+an unsafe but *unselected* field cannot block or leak into another selected
+field. Organization, private notes, addresses, dates, account
 information and other unselected details are excluded. The profile also
 offers vCard or CSV export of **that single contact only**, reusing the
 existing explicit document-location picker, count/size preflight and limited
