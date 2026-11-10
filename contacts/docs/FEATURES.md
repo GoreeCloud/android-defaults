@@ -12,6 +12,7 @@
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
 | Contact sharing | Implemented in source | Text preview and user-selected recipient |
 | Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
+| Favorite/group-scoped exports | Implemented in source; CI pending | Explicit subset selection followed by existing export confirmations and SAF destination; no background transfers |
 | Limited CSV export | Implemented in source; per-commit CI required | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
 | Single vCard import preview | Source and API26/35/36 emulator CI passed in PR #24; OEM editor acceptance open | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
@@ -78,3 +79,11 @@ field, count and byte limits before the document is opened. Multiple
 phone/email values are joined in one column, so this is deliberately not a
 round-trip backup. External document providers can still leave a partial
 file if writing fails after opening; no atomicity or encryption is claimed.
+
+**Explicit subset export controls (this PR):** The Tools view can select
+favorite contacts (private GoreeCloud favorite keys) or an existing Android
+group, then export only those matched contact records. Group selection is
+read-only and requires choosing a format, reviewing the export confirmation
+and selecting the destination provider. Empty selections are refused. Neither
+workflow expands vCard/CSV field fidelity, gains group-write permissions nor
+changes server synchronization or recovery behavior.

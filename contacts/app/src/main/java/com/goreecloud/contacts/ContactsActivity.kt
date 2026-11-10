@@ -498,6 +498,10 @@ class ContactsActivity : Activity() {
             "organizations. Other contact fields are not included in this preview.",
             14f, R.color.muted).apply { setPadding(0, px(8), 0, px(14)) })
         exportCard.addView(action("Choose export destination") { confirmExport(data.contacts) })
+        exportCard.addView(action("Export favorites as vCard") {
+            confirmExport(ContactLogic.favoriteContacts(data.contacts, favoriteKeys()))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) })
         container.addView(exportCard, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
@@ -507,6 +511,10 @@ class ContactsActivity : Activity() {
             "emails and organizations. Formula-like cells are escaped for spreadsheet safety.",
             14f, R.color.muted).apply { setPadding(0, px(8), 0, px(14)) })
         csvCard.addView(action("Save CSV export") { confirmCsvExport(data.contacts) })
+        csvCard.addView(action("Export favorites as CSV") {
+            confirmCsvExport(ContactLogic.favoriteContacts(data.contacts, favoriteKeys()))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) })
         container.addView(csvCard, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
@@ -522,6 +530,18 @@ class ContactsActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
 
+
+        if (data.groups.isNotEmpty()) {
+            val groupCard = card()
+            groupCard.addView(label("Export a contact group", 19f, R.color.ink, true))
+            groupCard.addView(label("Select an existing Android group and choose vCard or CSV. " +
+                "Only members of that group will be included.",
+                14f, R.color.muted).apply { setPadding(0, px(8), 0, px(14)) })
+            groupCard.addView(action("Select group to export") { chooseGroupExport(data) })
+            container.addView(groupCard, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = px(12) })
+        }
 
         val clusters = ContactLogic.duplicateClusters(data.contacts)
         val duplicateCard = card()
@@ -802,6 +822,32 @@ class ContactsActivity : Activity() {
                     Toast.makeText(this, "Document access unavailable", Toast.LENGTH_LONG).show()
                 }
             }.show()
+    }
+
+    /** No group sharing is performed until the user selects scope, format and destination. */
+    private fun chooseGroupExport(data: DirectorySnapshot) {
+        val groups = data.groups
+        if (groups.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("Choose group")
+            .setItems(groups.map { it.name }.toTypedArray()) { _, index ->
+                val chosen = groups[index]
+                val members = ContactLogic.groupContacts(data.contacts, chosen.id)
+                if (members.isEmpty()) {
+                    Toast.makeText(this, "No contacts in this group", Toast.LENGTH_LONG).show()
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("Export " + members.size + " members of " + chosen.name)
+                        .setItems(arrayOf("vCard (.vcf)", "CSV (.csv)")) { _, format ->
+                            if (format == 0) confirmExport(members)
+                            else confirmCsvExport(members)
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun confirmCsvExport(contacts: List<ContactEntry>) {

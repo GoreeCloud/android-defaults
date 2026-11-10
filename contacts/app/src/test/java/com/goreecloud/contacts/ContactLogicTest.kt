@@ -107,4 +107,16 @@ class ContactLogicTest {
         }
     }
 
+    @Test fun favoriteAndGroupExportScopesExcludeUnselectedContacts() {
+        val a = ContactEntry(1, "key-a", "A", groupIds = setOf(10))
+        val b = ContactEntry(2, "key-b", "B", groupIds = setOf(11))
+        val c = ContactEntry(3, "", "C", groupIds = setOf(10))
+        val all = listOf(a, b, c)
+        assertEquals(listOf(a, c),
+            ContactLogic.favoriteContacts(all, setOf("key-a", "id:3")))
+        assertEquals(listOf(a, c), ContactLogic.groupContacts(all, 10))
+        assertTrue(ContactLogic.groupContacts(all, 99).isEmpty())
+        assertTrue(ContactLogic.favoriteContacts(all, emptySet()).isEmpty())
+    }
+
 }

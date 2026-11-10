@@ -18,6 +18,15 @@ data class DirectorySnapshot(val contacts: List<ContactEntry>, val groups: List<
 
 /** Pure, offline transformations; no contact information leaves the device. */
 object ContactLogic {
+    /** Explicit scope selection, preserving the local directory order. */
+    fun favoriteContacts(contacts: List<ContactEntry>, favoriteKeys: Set<String>):
+        List<ContactEntry> = contacts.filter {
+        (it.lookupKey.ifBlank { "id:" + it.id }) in favoriteKeys
+    }
+
+    fun groupContacts(contacts: List<ContactEntry>, groupId: Long):
+        List<ContactEntry> = contacts.filter { groupId in it.groupIds }
+
     fun matches(contact: ContactEntry, search: String): Boolean {
         val terms = search.trim().lowercase(Locale.ROOT).split(Regex("\\s+"))
             .filter { it.isNotBlank() }
