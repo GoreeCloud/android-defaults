@@ -89,7 +89,7 @@ class ContactsRepository(
             val valueCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Phone.NUMBER)
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
-                val b = byId[cursor.getLong(idCol)] ?: continue
+                val b = byId[cursor.getLong(idCol)] ?: return@eachRow
                 val value = cursor.getString(valueCol)?.trim().orEmpty()
                 if (value.isNotBlank() && !b.phones.contains(value)) b.phones.add(value)
             }
@@ -102,7 +102,7 @@ class ContactsRepository(
             val valueCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Email.ADDRESS)
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
-                val b = byId[cursor.getLong(idCol)] ?: continue
+                val b = byId[cursor.getLong(idCol)] ?: return@eachRow
                 val value = cursor.getString(valueCol)?.trim().orEmpty()
                 if (value.isNotBlank() && b.emails.none { it.equals(value, true) }) b.emails.add(value)
             }
@@ -117,7 +117,7 @@ class ContactsRepository(
             val valueCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Organization.COMPANY)
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
-                val b = byId[cursor.getLong(idCol)] ?: continue
+                val b = byId[cursor.getLong(idCol)] ?: return@eachRow
                 if (b.organization.isBlank()) b.organization = cursor.getString(valueCol).orEmpty()
             }
         }
