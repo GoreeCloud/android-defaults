@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "contacts/**"
+      - "ci/**"
       - ".github/workflows/contacts.yml"
       - "README.md"
       - "LICENSE"
@@ -10,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "contacts/**"
+      - "ci/**"
       - ".github/workflows/contacts.yml"
 
 permissions:
@@ -79,6 +81,9 @@ jobs:
       - name: Verify screenshot script syntax and invalid API refusal
         run: |
           bash -n contacts/ci/capture-emulator.sh
+          bash -n ci/emulator-only.sh
+          bash -n ci/test-emulator-only.sh
+          bash ci/test-emulator-only.sh
           if bash contacts/ci/capture-emulator.sh invalid > /tmp/contacts-screenshot-probe.txt 2>&1; then
             echo "Contacts screenshot script accepted an invalid API" >&2
             exit 1
