@@ -14,6 +14,7 @@ serial="$(goreecloud_require_disposable_emulator "$api")" || exit 2
 adb_target() { command adb -s "$serial" "$@"; }
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
+source contacts/ci/fresh-hierarchy.sh
 screens="$repo_root/contacts/build/emulator-screenshots"
 mkdir -p "$screens"
 
@@ -44,8 +45,7 @@ ready() {
   local launcher_recovered=0
   # Bounded retries: uiautomator may momentarily expose a system startup overlay.
   for attempt in {1..20}; do
-    adb_target shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-    xml="$(adb_target shell cat /sdcard/window.xml 2>/dev/null || true)"
+    xml="$(capture_fresh_contacts_hierarchy)" || xml=""
     if [[ "$xml" == *"Your people"* && "$xml" == *"Your contacts stay yours"* ]]; then
       sleep 1
       return 0
