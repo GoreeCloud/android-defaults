@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
@@ -56,6 +57,7 @@ class ContactsActivity : Activity() {
     private val favorites by lazy { getSharedPreferences("favorites_local", MODE_PRIVATE) }
     private val permissionCode = 41
     private val exportCode = 42
+    private val importCode = 43
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -319,6 +321,7 @@ class ContactsActivity : Activity() {
                 requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), permissionCode)
             }
             fillWidth(action("Add contact with Android's editor") { createContact() })
+            fillWidth(action("Import one vCard with Android editor") { selectImportFile() })
             return
         }
         if (loading && snapshot == null) {
@@ -497,6 +500,17 @@ class ContactsActivity : Activity() {
         container.addView(exportCard, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
+        
+        val importCard = card()
+        importCard.addView(label("Import a contact", 19f, R.color.ink, true))
+        importCard.addView(label("Choose one UTF-8 vCard (3.0 or 4.0), preview supported fields, " +
+            "then review and save using Android's contact editor. Unsupported fields are not copied.",
+            14f, R.color.muted).apply { setPadding(0, px(8), 0, px(14)) })
+        importCard.addView(action("Choose a vCard file") { selectImportFile() })
+        container.addView(importCard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = px(12) })
+
 
         val clusters = ContactLogic.duplicateClusters(data.contacts)
         val duplicateCard = card()
@@ -656,6 +670,95 @@ class ContactsActivity : Activity() {
             }.show()
     }
 
+    /** Document access is restricted to the single URI the user explicitly selects. */
+    private fun selectImportFile() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, importCode)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "No document picker available", Toast.LENGTH_LONG).show()
+        } catch (_: SecurityException) {
+            Toast.makeText(this, "Document access unavailable", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun readImportedCard(uri: Uri) {
+        try {
+            worker.execute {
+                val result = runCatching {
+                    val stream = contentResolver.openInputStream(uri)
+                        ?: throw IllegalStateException("Cannot open selected document")
+                    stream.use { VCardImport.parse(VCardImport.readBounded(it)) }
+                }
+                runOnUiThread {
+                    if (destroyed) return@runOnUiThread
+                    val imported = result.getOrNull()
+                    if (imported == null) {
+                        AlertDialog.Builder(this)
+                            .setTitle("Unable to preview vCard")
+                            .setMessage("Select a single UTF-8 vCard 3.0 or 4.0 of up to 128 KB. " +
+                                "This limited importer refuses malformed, unsupported encoded, " +
+                                "or multi-contact files. No contacts were changed.")
+                            .setPositiveButton("OK", null).show()
+                    } else confirmImportedCard(imported)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            Toast.makeText(this, "Import worker busy; retry", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun confirmImportedCard(contact: ImportedContactPreview) {
+        val preview = buildString {
+            append(contact.name)
+            contact.phones.forEach { append("\nPhone: ").append(it) }
+            contact.emails.forEach { append("\nEmail: ").append(it) }
+            if (contact.organization.isNotBlank()) {
+                append("\nOrganization: ").append(contact.organization)
+            }
+            if (contact.omittedProperties > 0) {
+                append("\n\n").append(contact.omittedProperties)
+                    .append(" unsupported vCard properties will not be copied.")
+            }
+            append("\n\nAndroid's editor must be reviewed and saved manually. " +
+                "Account-specific fields may not appear in the editor.")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Review imported contact")
+            .setMessage(preview)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Open Android editor") { _, _ ->
+                val rows = ArrayList<ContentValues>()
+                contact.phones.forEach { number ->
+                    rows.add(ContentValues().apply {
+                        put(ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                        put(ContactsContract.CommonDataKinds.Phone.NUMBER, number)
+                    })
+                }
+                contact.emails.forEach { email ->
+                    rows.add(ContentValues().apply {
+                        put(ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
+                        put(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
+                    })
+                }
+                launch(Intent(Intent.ACTION_INSERT).apply {
+                    type = ContactsContract.Contacts.CONTENT_TYPE
+                    putExtra(ContactsContract.Intents.Insert.NAME, contact.name)
+                    if (contact.organization.isNotBlank()) {
+                        putExtra(ContactsContract.Intents.Insert.COMPANY, contact.organization)
+                    }
+                    putParcelableArrayListExtra(ContactsContract.Intents.Insert.DATA, rows)
+                })
+            }.show()
+    }
+
     private fun confirmExport(contacts: List<ContactEntry>) {
         if (contacts.isEmpty()) {
             Toast.makeText(this, "No contacts to export", Toast.LENGTH_SHORT).show()
@@ -693,6 +796,10 @@ class ContactsActivity : Activity() {
     @Deprecated("Android callback retained for API 26–35, no extra library required")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == importCode) {
+            if (resultCode == RESULT_OK) data?.data?.let { readImportedCard(it) }
+            return
+        }
         if (requestCode != exportCode) return
         val requested = pendingExport
         pendingExport = null
