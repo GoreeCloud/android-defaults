@@ -16,6 +16,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - User-initiated **CSV export** for limited contact fields, preflighted for field/size limits and spreadsheet-formula injection protection before opening a user-selected destination.
 - **Single-contact vCard import preview** for strict UTF-8 vCard 3/4 (up to 128 KiB): choose a file, review supported data and omissions, then open Android's user-confirmed insert editor. No direct provider inserts or automatic bulk import.
 - Offline-only design with no INTERNET, WRITE_CONTACTS, call or SMS permission; no telemetry or server.
+- GoreeShield privacy control to show and clear all **app-local** favorite markers after a clear warning; Android system STARRED and contacts remain untouched.
 - Floating bottom navigation, responsive native UI and semantic light/dark surfaces.
 - Recycled, stable-ID ListView rows for lower allocation during directory scrolling; all visible text and favorite markers are rebound on reuse. Performance profiling on 5,000–10,000 synthetic contacts and OEM devices remains pending.
 
