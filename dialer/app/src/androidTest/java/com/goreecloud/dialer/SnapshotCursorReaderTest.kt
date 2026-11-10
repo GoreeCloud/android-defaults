@@ -1,5 +1,6 @@
 package com.goreecloud.dialer
 
+import android.database.CursorWrapper
 import android.database.MatrixCursor
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
@@ -100,6 +101,28 @@ class SnapshotCursorReaderTest {
             SnapshotCursorReader.read(source, CancellationSignal(), 1) { null as String? }
         }
         assertTrue(source.isClosed)
+    }
+
+    @Test fun cancellationFromCursorCloseRejectsEvenACompletedLookingPage() {
+        // A provider can revoke a read as the cursor is released, including
+        // after the UI-visible record budget is reached.
+        for (limit in listOf(1, 10)) {
+            val source = cursor("555-0101", "555-0102")
+            val signal = CancellationSignal()
+            val wrapper = object : CursorWrapper(source) {
+                override fun close() {
+                    super.close()
+                    signal.cancel()
+                }
+            }
+            try {
+                SnapshotCursorReader.read(wrapper, signal, limit) { it.getString(0) }
+                fail("Canceled cursor cleanup must not publish a partial call/contacts list")
+            } catch (_: OperationCanceledException) {
+                assertTrue(source.isClosed)
+                assertTrue(signal.isCanceled)
+            }
+        }
     }
 
     @Test fun invalidRecordLimitIsRejected() {
