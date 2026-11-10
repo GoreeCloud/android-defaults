@@ -959,14 +959,19 @@ class DialerActivity : Activity() {
                 val list = mutableListOf<Contact>()
                 var failed = false
                 try {
-                    contentResolver.query(
+                    val cursor = contentResolver.query(
                         ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                         arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                             ContactsContract.CommonDataKinds.Phone.NUMBER,
                             ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
                         null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC",
                         signal
-                    )?.use { cursor ->
+                    )
+                    if (cursor == null) {
+                        // A null Cursor is a provider failure, not a verified
+                        // empty contact list or empty carrier call history.
+                        failed = true
+                    } else cursor.use { cursor ->
                         while (cursor.moveToNext() && list.size < 1500) {
                             val number = cursor.getString(1).orEmpty()
                             val id = cursor.getLong(2)
@@ -975,8 +980,9 @@ class DialerActivity : Activity() {
                         }
                     }
                 } catch (_: RuntimeException) {
-                    // Provider unavailable, revoked permission or OEM provider
-                    // failure: keep the UI usable without exposing any PII.
+                    // Do not present a partly populated result as complete if
+                    // an OEM provider fails during cursor iteration.
+                    list.clear()
                     failed = true
                 }
                 runOnUiThread {
@@ -1027,19 +1033,25 @@ class DialerActivity : Activity() {
                 val list = mutableListOf<Recent>()
                 var failed = false
                 try {
-                    contentResolver.query(
+                    val cursor = contentResolver.query(
                         CallLog.Calls.CONTENT_URI,
                         arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE,
                             CallLog.Calls.DATE, CallLog.Calls.DURATION,
                             CallLog.Calls.NUMBER_PRESENTATION),
                         null, null, "${CallLog.Calls.DATE} DESC", signal
-                    )?.use { cursor ->
+                    )
+                    if (cursor == null) {
+                        // A null Cursor is a provider failure, not a verified
+                        // empty contact list or empty carrier call history.
+                        failed = true
+                    } else cursor.use { cursor ->
                         while (cursor.moveToNext() && list.size < 150) {
                             list.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
                                 cursor.getLong(2), cursor.getLong(3), cursor.getInt(4)))
                         }
                     }
                 } catch (_: RuntimeException) {
+                    list.clear()
                     failed = true
                 }
                 runOnUiThread {
