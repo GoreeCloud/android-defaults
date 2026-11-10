@@ -16,10 +16,11 @@ internal object SnapshotCursorReader {
         cursor: Cursor?, signal: CancellationSignal, maxRecords: Int,
         map: (Cursor) -> T?
     ): List<T> {
-        require(maxRecords in 1..10000)
-        signal.throwIfCanceled()
         val actual = cursor ?: throw IllegalStateException("Provider returned a null cursor")
         return actual.use { source ->
+            // Even cancellation or a bad limit must release an acquired cursor.
+            require(maxRecords in 1..10000)
+            signal.throwIfCanceled()
             val output = ArrayList<T>()
             var scanned = 0
             while (output.size < maxRecords && source.moveToNext()) {

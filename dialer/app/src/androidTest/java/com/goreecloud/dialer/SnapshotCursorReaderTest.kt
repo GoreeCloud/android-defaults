@@ -74,7 +74,7 @@ class SnapshotCursorReaderTest {
             SnapshotCursorReader.read(source, signal, 10) { it.getString(0) }
             fail("Canceled read must not complete")
         } catch (_: OperationCanceledException) {
-            assertFalse("Canceled before acquiring cursor", source.isClosed)
+            assertTrue("An already-acquired cursor is always released", source.isClosed)
         } finally {
             source.close()
         }
