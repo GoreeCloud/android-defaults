@@ -47,7 +47,13 @@ provider-fault / load-testing acceptance. The actual query can still block in
 OEM/provider code; cancellation is cooperative, not guaranteed.
 
 **Export safety:** The selected destination is opened only after a full
-read-only in-memory preflight of every vCard. Limits are 10,000 contacts,
+read-only in-memory preflight of every vCard. Pending export snapshots are now
+cleared when Contacts access is revoked, and a successful document-picker
+result does not authorize an export after READ_CONTACTS permission is lost.
+Permission is rechecked on picker return and by the queued worker immediately
+before opening the user-chosen destination. These checks cannot retroactively
+revoke a write that has already begun or make external providers atomic.
+Limits are 10,000 contacts,
 10 MiB total, 128 KiB per card, 4,096 characters per field and 100 fields
 per phone/email kind. Oversized/invalid inputs fail without deliberate
 truncation. This preview does not guarantee atomic writes when an external
