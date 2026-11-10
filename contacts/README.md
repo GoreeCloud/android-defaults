@@ -13,7 +13,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - Call via ACTION_DIAL and compose SMS/email via installed apps; selectively share individual name/phone/email fields with none preselected, explicit payload preview and a recipient-app chooser. Private notes and addresses remain excluded.
 - Read-only duplicate suggestions by normalized phone/email, with a bounded candidate chooser to inspect each suggested profile without automatic merge.
 - Local upcoming birthday and anniversary overview (next 90 days), excluding custom one-off dates and with no background reminders or age inference.
-- User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
+- User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization. Preflight refuses Unicode directional-format controls and Unicode line separators that could visually spoof a recipient's record or be refused by the limited local importer; ordinary multilingual text is preserved.
 - **Scoped export:** choose an individual profile, favorites or an existing Android group and export only those records as vCard or CSV after explicit confirmation.
 - User-initiated **CSV export** for limited contact fields, preflighted for field/size limits and spreadsheet-formula injection protection before opening a user-selected destination.
 - **Single-contact vCard import preview** for strict UTF-8 vCard 3/4 (up to 128 KiB): choose a file, review supported data and omissions, then open Android's user-confirmed insert editor. No direct provider inserts or automatic bulk import.
