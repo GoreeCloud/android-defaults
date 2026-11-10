@@ -8,36 +8,34 @@ if [[ ! "$api" =~ ^(26|35|36)$ ]]; then
   printf 'Unsupported disposable emulator API level.\n' >&2
   exit 2
 fi
-# Defense in depth: fail rather than ever clearing a personal handset.
-serial="$(adb get-serialno | tr -d '\r')"
-if [[ "$serial" != emulator-* ]]; then
-  printf 'Refusing screenshot setup on a non-emulator device.\n' >&2
-  exit 2
-fi
+# Verify the explicitly targeted disposable emulator before clearing the app.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/ci/emulator-only.sh"
+serial="$(goreecloud_require_disposable_emulator "$api")" || exit 2
+adb_target() { command adb -s "$serial" "$@"; }
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 screens="$repo_root/contacts/build/emulator-screenshots"
 mkdir -p "$screens"
 
 cleanup() {
-  adb shell settings put system font_scale 1.0 >/dev/null 2>&1 || true
+  adb_target shell settings put system font_scale 1.0 >/dev/null 2>&1 || true
   if (( api >= 29 )); then
-    adb shell cmd uimode night no >/dev/null 2>&1 || true
+    adb_target shell cmd uimode night no >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
-adb install -r contacts/app/build/outputs/apk/debug/app-debug.apk >/dev/null
+adb_target install -r contacts/app/build/outputs/apk/debug/app-debug.apk >/dev/null
 # Ensure screenshots contain NO personal/synthetic contacts, even when
 # instrumentation previously exercised test-only in-memory provider records.
-adb shell pm clear com.goreecloud.contacts >/dev/null
+adb_target shell pm clear com.goreecloud.contacts >/dev/null
 # A freshly booted disposable emulator may still be locked or asleep.
 # These actions do not grant permissions, interact with contacts, or click UI dialogs.
-adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
-adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+adb_target shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+adb_target shell wm dismiss-keyguard >/dev/null 2>&1 || true
 
 launch() {
-  adb shell am start -W -S -f 0x10008000 -n \
+  adb_target shell am start -W -S -f 0x10008000 -n \
     com.goreecloud.contacts/.ContactsActivity >/dev/null
 }
 
@@ -46,8 +44,8 @@ ready() {
   local launcher_recovered=0
   # Bounded retries: uiautomator may momentarily expose a system startup overlay.
   for attempt in {1..20}; do
-    adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-    xml="$(adb shell cat /sdcard/window.xml 2>/dev/null || true)"
+    adb_target shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+    xml="$(adb_target shell cat /sdcard/window.xml 2>/dev/null || true)"
     if [[ "$xml" == *"Your people"* && "$xml" == *"Your contacts stay yours"* ]]; then
       sleep 1
       return 0
@@ -60,8 +58,8 @@ ready() {
           "$xml" == *"Pixel Launcher isn't responding"* ]]; then
       launcher_recovered=1
       printf 'Detected synthetic Pixel Launcher ANR overlay; restarting emulator launcher once.\n' >&2
-      if adb shell pm path com.google.android.apps.nexuslauncher >/dev/null 2>&1; then
-        adb shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
+      if adb_target shell pm path com.google.android.apps.nexuslauncher >/dev/null 2>&1; then
+        adb_target shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
         sleep 3
         launch
       fi
@@ -71,36 +69,36 @@ ready() {
   done
   # Leave useful, privacy-safe diagnostics; never dump raw contact details or grant access.
   printf 'Contacts foreground probe (disposable emulator only):\n' >&2
-  adb shell pidof com.goreecloud.contacts >&2 || true
-  adb shell dumpsys activity activities 2>/dev/null | \
+  adb_target shell pidof com.goreecloud.contacts >&2 || true
+  adb_target shell dumpsys activity activities 2>/dev/null | \
     grep -E "mResumedActivity|topResumedActivity|com.goreecloud.contacts" | head -n 8 >&2 || true
-  adb exec-out screencap -p > "$screens/diagnostic-android-$api.png" || true
+  adb_target exec-out screencap -p > "$screens/diagnostic-android-$api.png" || true
   printf 'Synthetic empty-state Contacts gate not confirmed after 20 attempts.\n' >&2
   exit 1
 }
 
 launch
 ready
-adb exec-out screencap -p > "$screens/contacts-default-android-$api.png"
+adb_target exec-out screencap -p > "$screens/contacts-default-android-$api.png"
 
-adb shell settings put system font_scale 1.5
-adb shell am force-stop com.goreecloud.contacts
+adb_target shell settings put system font_scale 1.5
+adb_target shell am force-stop com.goreecloud.contacts
 launch
 ready
-actual="$(adb shell settings get system font_scale | tr -d '\r')"
+actual="$(adb_target shell settings get system font_scale | tr -d '\r')"
 if [[ "$actual" != "1.5" ]]; then
   printf 'Android refused the requested 1.5 font scale.\n' >&2
   exit 1
 fi
-adb exec-out screencap -p > "$screens/contacts-large-text-android-$api.png"
+adb_target exec-out screencap -p > "$screens/contacts-large-text-android-$api.png"
 
 if (( api >= 29 )); then
-  adb shell settings put system font_scale 1.0
-  adb shell cmd uimode night yes
-  adb shell am force-stop com.goreecloud.contacts
+  adb_target shell settings put system font_scale 1.0
+  adb_target shell cmd uimode night yes
+  adb_target shell am force-stop com.goreecloud.contacts
   launch
   ready
-  adb exec-out screencap -p > "$screens/contacts-dark-android-$api.png"
+  adb_target exec-out screencap -p > "$screens/contacts-dark-android-$api.png"
 fi
 
 printf 'Captured permission-denied Contacts UI on disposable Android %s.\n' "$api"
