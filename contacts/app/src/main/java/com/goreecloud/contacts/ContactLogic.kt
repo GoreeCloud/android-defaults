@@ -43,6 +43,24 @@ object ContactLogic {
         return terms.all { text.contains(it) }
     }
 
+    /**
+     * Conservative duplicate evidence. Do not guess matches from the last
+     * ten digits of an unrelated international number or an extension.
+     * NANP +1 and plain ten-digit formatting remain equivalent.
+     */
+    private fun duplicatePhoneKey(number: String): String? {
+        val raw = number.trim()
+        if (raw.any { it.isLetter() || it in "#;," }) return null
+        val digits = raw.filter { it.isDigit() }
+        if (digits.length !in 10..15) return null
+        return when {
+            digits.length == 11 && digits.startsWith("1") ->
+                "p:nanp:" + digits.drop(1)
+            digits.length == 10 -> "p:nanp:" + digits
+            else -> "p:full:" + digits
+        }
+    }
+
     /** Suggestions only. Never auto-merge contacts or modify the provider. */
     fun duplicateClusters(contacts: List<ContactEntry>): List<List<ContactEntry>> {
         val parent = IntArray(contacts.size) { it }
@@ -62,13 +80,11 @@ object ContactLogic {
         val seen = mutableMapOf<String, Int>()
         contacts.forEachIndexed { i, c ->
             val keys = c.emails.asSequence()
-                .map { "e:" + it.trim().lowercase(Locale.ROOT) }
-                .filter { it.length > 2 }
-                .plus(c.phones.asSequence().map { number ->
-                    val digits = number.filter { it.isDigit() }
-                    if (digits.length >= 10) "p:" + digits.takeLast(10)
-                    else if (digits.length >= 7) "p:" + digits else ""
-                }.filter { it.isNotEmpty() }).distinct()
+                .map { it.trim().lowercase(Locale.ROOT) }
+                .filter { email -> email.indexOf('@') in 1 until email.lastIndex }
+                .map { "e:" + it }
+                .plus(c.phones.asSequence().mapNotNull(::duplicatePhoneKey))
+                .distinct()
             keys.forEach { key ->
                 val old = seen.putIfAbsent(key, i)
                 if (old != null) join(i, old)
