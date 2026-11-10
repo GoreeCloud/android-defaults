@@ -59,6 +59,9 @@ class ContactsRepository(
                 throw IllegalStateException("Contacts provider exceeded the read safety budget")
             row()
         }
+        // A provider can cancel while returning end-of-cursor. The last row's
+        // earlier check does not authorize publishing the completed snapshot.
+        signal.throwIfCanceled()
     }
 
     private data class Builder(
@@ -98,6 +101,8 @@ class ContactsRepository(
             eachRow(cursor, signal, maxContactRows) {
                 signal.throwIfCanceled()
                 val id = cursor.getLong(idCol)
+                if (id <= 0L || byId.containsKey(id))
+                    throw IllegalStateException("Contacts provider returned an invalid or duplicate ID")
                 byId[id] = Builder(id, checkedValue(cursor.getString(keyCol)),
                     checkedValue(cursor.getString(nameCol)).ifEmpty { "Unnamed contact" })
             }
@@ -254,6 +259,9 @@ class ContactsRepository(
             }
         }
 
+        // The final provider cursor may cancel during close() even after the
+        // last row was successfully mapped. Never publish stale data on cancel.
+        signal.throwIfCanceled()
         return DirectorySnapshot(
             byId.values.map { it.freeze() }.sortedWith(compareBy(
                 { it.name.lowercase(Locale.ROOT) }, { it.id }

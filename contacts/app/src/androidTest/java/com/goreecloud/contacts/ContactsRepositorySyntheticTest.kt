@@ -1,6 +1,7 @@
 package com.goreecloud.contacts
 
 import android.database.Cursor
+import android.database.CursorWrapper
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.CancellationSignal
@@ -46,7 +47,9 @@ class ContactsRepositorySyntheticTest {
         throwAt: String? = null,
         maxContacts: Int = 10000,
         maxRelated: Int = 60000,
-        malformedAt: String? = null
+        malformedAt: String? = null,
+        cancelOnExhaustionAt: String? = null,
+        cancelOnCloseAt: String? = null
     ): ContactsRepository {
         val fake: (
             Uri, Array<String>, String?, Array<String>?, String?, CancellationSignal
@@ -57,8 +60,24 @@ class ContactsRepositorySyntheticTest {
             if (target == nullAt) null
             else {
                 val columns = if (target == malformedAt) arrayOf("missing_column") else projection
-                MatrixCursor(columns).apply {
+                val data = MatrixCursor(columns).apply {
                     rows[target].orEmpty().forEach { addRow(it) }
+                }
+                when (target) {
+                    cancelOnExhaustionAt -> object : CursorWrapper(data) {
+                        override fun moveToNext(): Boolean {
+                            val available = super.moveToNext()
+                            if (!available) signal.cancel()
+                            return available
+                        }
+                    }
+                    cancelOnCloseAt -> object : CursorWrapper(data) {
+                        override fun close() {
+                            super.close()
+                            signal.cancel()
+                        }
+                    }
+                    else -> data
                 }
             }
         }
@@ -247,5 +266,45 @@ class ContactsRepositorySyntheticTest {
         assertEquals(n, snap.contacts.single().phones.size)
     }
 
+    @Test fun providerCancellationAtFinalCursorExhaustionRejectsSnapshot() {
+        // A provider can cancel while moveToNext() returns false. No prior
+        // per-row check can authenticate a supposedly complete directory.
+        val signal = CancellationSignal()
+        try {
+            repository(
+                rows = mapOf("contacts" to listOf(arrayOf(11L, "lookup-a", "Alice"))),
+                cancelOnExhaustionAt = "notes"
+            ).load(signal)
+            fail("A canceled final cursor must never publish contact data")
+        } catch (_: OperationCanceledException) {
+            assertTrue(signal.isCanceled)
+        }
+    }
 
+    @Test fun providerCancellationDuringFinalCursorCloseRejectsSnapshot() {
+        val signal = CancellationSignal()
+        try {
+            repository(
+                rows = mapOf("contacts" to listOf(arrayOf(11L, "lookup-a", "Alice"))),
+                cancelOnCloseAt = "notes"
+            ).load(signal)
+            fail("A canceled final cursor close must never publish contact data")
+        } catch (_: OperationCanceledException) {
+            assertTrue(signal.isCanceled)
+        }
+    }
+
+    @Test fun duplicateOrNonPositiveProviderContactIdsRejectPartialDirectory() {
+        val rows = listOf(
+            listOf(arrayOf<Any?>(11L, "first", "Alice"),
+                arrayOf<Any?>(11L, "second", "Bob")),
+            listOf(arrayOf<Any?>(0L, "zero", "Invalid")),
+            listOf(arrayOf<Any?>(-1L, "negative", "Invalid"))
+        )
+        for (contacts in rows) {
+            fails {
+                repository(mapOf("contacts" to contacts)).load(CancellationSignal())
+            }
+        }
+    }
 }
