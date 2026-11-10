@@ -128,6 +128,13 @@ object ContactLogic {
         require(text.none { Character.isISOControl(it) && it != '\r' && it != '\n' }) {
             "Contact field has an invalid control character"
         }
+        // These rendering and bidi format controls can spoof vCard field
+        // previews while the conservative import parser refuses them. Keep
+        // export/import in agreement; ordinary Unicode letters/emoji remain.
+        require(text.none { ch ->
+            ch == '\u061C' || ch in '\u200E'..'\u200F' ||
+                ch in '\u2028'..'\u202E' || ch in '\u2066'..'\u2069'
+        }) { "Contact vCard field contains a spoofable directional control" }
         return text
         .replace("\\", "\\\\")
         .replace("\r\n", "\n")
