@@ -32,13 +32,13 @@ object ContactLogic {
     fun groupContacts(contacts: List<ContactEntry>, groupId: Long):
         List<ContactEntry> = contacts.filter { groupId in it.groupIds }
 
+    /** Search the visible directory fields only; hidden note text must not be probed. */
     fun matches(contact: ContactEntry, search: String): Boolean {
         val terms = search.trim().lowercase(Locale.ROOT).split(Regex("\\s+"))
             .filter { it.isNotBlank() }
         val text = listOf(contact.name, contact.organization)
             .plus(contact.phones).plus(contact.emails)
             .plus(contact.addresses).plus(contact.importantDates.map { it.label + " " + it.value })
-            .plus(contact.notes)
             .joinToString(" ").lowercase(Locale.ROOT)
         return terms.all { text.contains(it) }
     }

@@ -2,6 +2,8 @@
 
 **Scope: Android only.** Source implementation is not evidence of release, device acceptance or all-platform support.
 
+**Private-note search privacy (November 10, 2026):** The original local directory matchers included hidden note text, even when the notes were masked in profile cards. This could disclose whether a contact carried a searched keyword without an explicit reveal. The development fix excludes note contents from default directory filtering and the legacy contact matcher; visible names, phones, emails, organizations, addresses and date labels remain searchable. Notes are still available only through the existing affirmative, secure reveal dialog. Pure JVM regressions cover both matchers. This is not encryption, provider-level access control or a physical-device privacy certification.
+
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Native Android directory | Implemented in source | Permission-gated background Contacts Provider reads |
