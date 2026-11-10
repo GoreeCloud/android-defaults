@@ -17,7 +17,8 @@
 | Single vCard import preview | Source and API26/35/36 emulator CI passed in PR #24; OEM editor acceptance open | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
-| Rich data fields, photos, posters, birthdays | Planned | Android provider/UI support and privacy review |
+| Postal addresses, birthdays, anniversaries, custom dates and notes | Implemented in source; CI pending | Read-only bounded Android Data queries; search/detail display; deliberately excluded from current share/export |
+| Photos, posters, birthday notifications and rich-field editing | Planned | Android provider/UI and privacy review |
 | Multi-card vCard/CSV import, full export, bulk edit | Planned | Fidelity, permissions, rollback; single-card preview is not full import |
 | Delete, Trash, history, backups and restore | Planned | Data safety and retention design |
 | Group writes, ringtones, SIM moves | Planned | New Android manage-contacts permissions review |
@@ -101,3 +102,15 @@ ANR, the CI-only script now attempts one bounded force-stop/relaunch of Pixel
 Launcher before continuing. This is a diagnostic/recovery measure, **not
 proof** that all Android 35 startup failures are fixed. See issue #26; reruns,
 visual inspection and OEM acceptance remain open.
+
+**Read-only extended details (this PR):** Android Contacts Provider Data
+now supplies available formatted postal addresses, significant dates
+(birthday, anniversary and labeled custom dates), and notes to the local
+contact detail and offline search views. Per-contact row/value caps prevent
+unbounded data retention, and missing/malformed related cursors fail the
+entire snapshot rather than silently dropping fields. These private details
+are deliberately **excluded** from the existing text share, CSV export
+and vCard export. No new permissions, trackers, external lookup, write
+operations, birthday notifications or address-map transfers are introduced.
+This is not full-field export or recovery. Synthetic emulator tests and
+a real-OEM accessibility review remain mandatory.

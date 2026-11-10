@@ -119,4 +119,20 @@ class ContactLogicTest {
         assertTrue(ContactLogic.favoriteContacts(all, emptySet()).isEmpty())
     }
 
+    @Test fun extendedDetailsAreSearchableWithoutSharingThem() {
+        val entry = ContactEntry(
+            id = 33, lookupKey = "synthetic", name = "Taylor",
+            addresses = listOf("Memphis, Tennessee"),
+            importantDates = listOf(ImportantDate("Birthday", "--11-09")),
+            notes = listOf("private research context")
+        )
+        assertTrue(ContactLogic.matches(entry, "memphis"))
+        assertTrue(ContactLogic.matches(entry, "birthday"))
+        assertTrue(ContactLogic.matches(entry, "research"))
+        assertFalse(ContactLogic.matches(entry, "nonmatching"))
+        val card = ContactLogic.vCard(entry)
+        assertFalse(card.contains("private research context"))
+        assertFalse(card.contains("Memphis"))
+    }
+
 }

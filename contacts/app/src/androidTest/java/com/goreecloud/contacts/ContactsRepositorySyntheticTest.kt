@@ -26,9 +26,17 @@ class ContactsRepositorySyntheticTest {
         CommonDataKinds.Email.CONTENT_URI -> "emails"
         ContactsContract.Groups.CONTENT_URI -> "groups"
         ContactsContract.Data.CONTENT_URI ->
-            if (arguments?.contains(CommonDataKinds.Organization.CONTENT_ITEM_TYPE) == true)
-                "organizations"
-            else "memberships"
+            when {
+                arguments?.contains(CommonDataKinds.Organization.CONTENT_ITEM_TYPE) == true ->
+                    "organizations"
+                arguments?.contains(CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE) == true ->
+                    "addresses"
+                arguments?.contains(CommonDataKinds.Event.CONTENT_ITEM_TYPE) == true ->
+                    "events"
+                arguments?.contains(CommonDataKinds.Note.CONTENT_ITEM_TYPE) == true ->
+                    "notes"
+                else -> "memberships"
+            }
         else -> throw IllegalArgumentException("Unexpected URI in synthetic test")
     }
 
@@ -93,7 +101,11 @@ class ContactsRepositorySyntheticTest {
                 arrayOf(11L, "A@EXAMPLE.INVALID")),
             "organizations" to listOf(arrayOf(11L, "Synthetic Co.")),
             "groups" to listOf(arrayOf(4L, "Friends")),
-            "memberships" to listOf(arrayOf(11L, 4L))
+            "memberships" to listOf(arrayOf(11L, 4L)),
+            "addresses" to listOf(arrayOf(11L, "123 Test Rd, Exampleville")),
+            "events" to listOf(arrayOf(11L, "--11-09",
+                CommonDataKinds.Event.TYPE_BIRTHDAY, null)),
+            "notes" to listOf(arrayOf(11L, "Synthetic note"))
         )
         val snap = repository(rows).load(CancellationSignal())
         assertEquals(listOf("Alpha", "Zeta"), snap.contacts.map { it.name })
@@ -102,6 +114,10 @@ class ContactsRepositorySyntheticTest {
         assertEquals(listOf("a@example.invalid"), snap.contacts[0].emails)
         assertEquals("Synthetic Co.", snap.contacts[0].organization)
         assertEquals(setOf(4L), snap.contacts[0].groupIds)
+        assertEquals(listOf("123 Test Rd, Exampleville"), snap.contacts[0].addresses)
+        assertEquals(listOf(ImportantDate("Birthday", "--11-09")),
+            snap.contacts[0].importantDates)
+        assertEquals(listOf("Synthetic note"), snap.contacts[0].notes)
         assertEquals(listOf(GroupEntry(4L, "Friends")), snap.groups)
     }
 
@@ -156,4 +172,35 @@ class ContactsRepositorySyntheticTest {
             // No provider access occurred because requiredQuery checks first.
         }
     }
+    @Test fun missingExtendedCursorRejectsIncompleteContactDetails() {
+        fails {
+            repository(mapOf("contacts" to listOf(arrayOf(11L, "lookup-a", "A"))),
+                nullAt = "addresses").load(CancellationSignal())
+        }
+    }
+
+    @Test fun oversizedContactNoteFailsClosedWithoutTruncation() {
+        fails {
+            repository(mapOf(
+                "contacts" to listOf(arrayOf(11L, "lookup-a", "A")),
+                "notes" to listOf(arrayOf(11L, "x".repeat(4097)))
+            )).load(CancellationSignal())
+        }
+    }
+
+    @Test fun customDatesAndPostalRowsStayInOwnAggregate() {
+        val snap = repository(mapOf(
+            "contacts" to listOf(arrayOf(11L, "lookup-a", "A"),
+                arrayOf(12L, "lookup-b", "B")),
+            "addresses" to listOf(arrayOf(11L, "Post Office"), arrayOf(99L, "Unknown")),
+            "events" to listOf(arrayOf(12L, "2026-12-01",
+                CommonDataKinds.BaseTypes.TYPE_CUSTOM, "Graduation"))
+        )).load(CancellationSignal())
+        assertEquals(listOf("Post Office"), snap.contacts[0].addresses)
+        assertTrue(snap.contacts[1].addresses.isEmpty())
+        assertEquals(listOf(ImportantDate("Graduation", "2026-12-01")),
+            snap.contacts[1].importantDates)
+    }
+
+
 }

@@ -55,10 +55,17 @@ class ContactsRepository(
         val phones: MutableList<String> = mutableListOf(),
         val emails: MutableList<String> = mutableListOf(),
         var organization: String = "",
-        val groups: MutableSet<Long> = mutableSetOf()
+        val groups: MutableSet<Long> = mutableSetOf(),
+        val addresses: MutableList<String> = mutableListOf(),
+        val importantDates: MutableList<ImportantDate> = mutableListOf(),
+        val notes: MutableList<String> = mutableListOf()
     ) {
-        fun freeze() = ContactEntry(id, lookupKey, name, phones.toList(),
-            emails.toList(), organization, groups.toSet())
+        fun freeze() = ContactEntry(
+            id = id, lookupKey = lookupKey, name = name, phones = phones.toList(),
+            emails = emails.toList(), organization = organization,
+            groupIds = groups.toSet(), addresses = addresses.toList(),
+            importantDates = importantDates.toList(), notes = notes.toList()
+        )
     }
 
     fun load(signal: CancellationSignal): DirectorySnapshot {
@@ -147,6 +154,83 @@ class ContactsRepository(
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
                 byId[cursor.getLong(idCol)]?.groups?.add(cursor.getLong(groupCol))
+            }
+        }
+
+        // Extended Android Data rows are strictly read-only and memory-bounded.
+        // A failed/malformed query aborts the entire snapshot rather than hiding fields.
+        fun checkedValue(value: String?, limit: Int = 4096): String {
+            val text = value?.trim().orEmpty()
+            if (text.length > limit)
+                throw IllegalStateException("Contact detail exceeds the safe display budget")
+            return text
+        }
+        requiredQuery(ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID,
+                CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS),
+            ContactsContract.Data.MIMETYPE + "=?",
+            arrayOf(CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE), null, signal
+        ).use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
+            val addressCol = cursor.getColumnIndexOrThrow(
+                CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS)
+            eachRow(cursor, signal, maxRelatedRows) {
+                val contact = byId[cursor.getLong(idCol)] ?: return@eachRow
+                val address = checkedValue(cursor.getString(addressCol))
+                if (address.isNotEmpty() && address !in contact.addresses) {
+                    if (contact.addresses.size >= 16)
+                        throw IllegalStateException("Too many contact addresses")
+                    contact.addresses.add(address)
+                }
+            }
+        }
+        requiredQuery(ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID, CommonDataKinds.Event.START_DATE,
+                CommonDataKinds.Event.TYPE, CommonDataKinds.Event.LABEL),
+            ContactsContract.Data.MIMETYPE + "=?",
+            arrayOf(CommonDataKinds.Event.CONTENT_ITEM_TYPE), null, signal
+        ).use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
+            val dateCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Event.START_DATE)
+            val typeCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Event.TYPE)
+            val labelCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Event.LABEL)
+            eachRow(cursor, signal, maxRelatedRows) {
+                val contact = byId[cursor.getLong(idCol)] ?: return@eachRow
+                val value = checkedValue(cursor.getString(dateCol), 128)
+                if (value.isNotEmpty()) {
+                    val kind = if (cursor.isNull(typeCol))
+                        CommonDataKinds.Event.TYPE_OTHER else cursor.getInt(typeCol)
+                    val label = when (kind) {
+                        CommonDataKinds.Event.TYPE_BIRTHDAY -> "Birthday"
+                        CommonDataKinds.Event.TYPE_ANNIVERSARY -> "Anniversary"
+                        CommonDataKinds.BaseTypes.TYPE_CUSTOM ->
+                            checkedValue(cursor.getString(labelCol), 128).ifEmpty { "Date" }
+                        else -> "Date"
+                    }
+                    val entry = ImportantDate(label, value)
+                    if (entry !in contact.importantDates) {
+                        if (contact.importantDates.size >= 16)
+                            throw IllegalStateException("Too many contact dates")
+                        contact.importantDates.add(entry)
+                    }
+                }
+            }
+        }
+        requiredQuery(ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID, CommonDataKinds.Note.NOTE),
+            ContactsContract.Data.MIMETYPE + "=?",
+            arrayOf(CommonDataKinds.Note.CONTENT_ITEM_TYPE), null, signal
+        ).use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
+            val noteCol = cursor.getColumnIndexOrThrow(CommonDataKinds.Note.NOTE)
+            eachRow(cursor, signal, maxRelatedRows) {
+                val contact = byId[cursor.getLong(idCol)] ?: return@eachRow
+                val value = checkedValue(cursor.getString(noteCol))
+                if (value.isNotEmpty() && value !in contact.notes) {
+                    if (contact.notes.size >= 8)
+                        throw IllegalStateException("Too many contact notes")
+                    contact.notes.add(value)
+                }
             }
         }
 

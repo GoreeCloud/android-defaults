@@ -8,7 +8,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 
 - On-device Android Contacts Provider read with explicit READ_CONTACTS runtime consent. No contact data upload.
 - Search names, numbers, emails and organizations; alphabetized directory; app-local favorites; Android groups and membership filtering.
-- Profile cards with phone/email/organization, and add/edit through Android system contact intents.
+- Profile cards with phone/email/organization and locally read formatted addresses, important dates and notes; add/edit through Android system contact intents. Private extended details remain absent from the current share and export paths.
 - Call via ACTION_DIAL, compose SMS/email via installed apps, share only after preview and explicit confirmation.
 - Read-only duplicate suggestions by normalized phone/email.
 - User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
@@ -18,7 +18,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - Offline-only design with no INTERNET, WRITE_CONTACTS, call or SMS permission; no telemetry or server.
 - Floating bottom navigation, responsive native UI and semantic light/dark surfaces.
 
-**Not implemented:** Android system STARRED updates, direct bulk contact changes, group edits, delete/Trash, rich field round-trips, contact photos, QR exchange, SIM transfers, multi-contact/full-fidelity imports, self-hosted sync, backups, default-handler replacement, device/release acceptance.
+**Not implemented:** Android system STARRED updates, direct bulk contact changes, group edits, delete/Trash, rich field round-trips, birthday notifications, contact photos, QR exchange, SIM transfers, multi-contact/full-fidelity imports, self-hosted sync, backups, default-handler replacement, device/release acceptance.
 
 ## Build
 
