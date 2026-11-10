@@ -44,7 +44,13 @@ A new entirely synthetic MatrixCursor instrumentation suite checks null/empty,
 field joins/deduplication, malformed records, cancellation and row caps.
 Those tests never access real contacts, modify system accounts or claim OEM
 provider-fault / load-testing acceptance. The actual query can still block in
-OEM/provider code; cancellation is cooperative, not guaranteed.
+OEM/provider code; cancellation is cooperative, not guaranteed. A provider may
+report cancellation only as its final cursor is exhausted or closed: the
+repository now rechecks cancellation at both boundaries and refuses a
+completed-looking snapshot. Synthetic instrumentation also rejects duplicated,
+zero or negative provider contact IDs rather than silently overwriting one
+record with another. These checks cannot force an uncooperative OEM provider
+to finish or prove performance on physical devices.
 
 **Export safety:** The selected destination is opened only after a full
 read-only in-memory preflight of every vCard. Pending export snapshots are now
