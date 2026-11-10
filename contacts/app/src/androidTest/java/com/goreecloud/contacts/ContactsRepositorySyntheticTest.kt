@@ -76,7 +76,8 @@ class ContactsRepositorySyntheticTest {
     }
 
     @Test fun emptyContactsStillReturnsValidGroups() {
-        val rows = mapOf("groups" to listOf(arrayOf(9L, "Empty circle")))
+        val rows: Map<String, List<Array<Any?>>> =
+            mapOf("groups" to listOf(arrayOf<Any?>(9L, "Empty circle")))
         val snap = repository(rows).load(CancellationSignal())
         assertTrue(snap.contacts.isEmpty())
         assertEquals(listOf(GroupEntry(9, "Empty circle")), snap.groups)
