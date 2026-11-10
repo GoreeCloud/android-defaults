@@ -26,6 +26,19 @@ class ContactsRepository(
         require(maxContactRows > 0 && maxRelatedRows > 0)
     }
 
+    companion object {
+        const val MAX_INLINE_FIELD_CHARS = 4096
+        const val MAX_CHANNELS_PER_CONTACT = 100
+        const val MAX_GROUPS_PER_CONTACT = 256
+    }
+
+    private fun checkedValue(value: String?, limit: Int = MAX_INLINE_FIELD_CHARS): String {
+        val text = value?.trim().orEmpty()
+        if (text.length > limit)
+            throw IllegalStateException("Contact detail exceeds the safe read budget")
+        return text
+    }
+
     /** A missing cursor is a provider failure, never a verified empty directory. */
     private fun requiredQuery(
         uri: Uri, columns: Array<String>, selection: String?,
@@ -85,8 +98,8 @@ class ContactsRepository(
             eachRow(cursor, signal, maxContactRows) {
                 signal.throwIfCanceled()
                 val id = cursor.getLong(idCol)
-                byId[id] = Builder(id, cursor.getString(keyCol) ?: "",
-                    cursor.getString(nameCol)?.takeIf { it.isNotBlank() } ?: "Unnamed contact")
+                byId[id] = Builder(id, checkedValue(cursor.getString(keyCol)),
+                    checkedValue(cursor.getString(nameCol)).ifEmpty { "Unnamed contact" })
             }
         }
         requiredQuery(CommonDataKinds.Phone.CONTENT_URI,
@@ -97,8 +110,12 @@ class ContactsRepository(
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
                 val b = byId[cursor.getLong(idCol)] ?: return@eachRow
-                val value = cursor.getString(valueCol)?.trim().orEmpty()
-                if (value.isNotBlank() && !b.phones.contains(value)) b.phones.add(value)
+                val value = checkedValue(cursor.getString(valueCol))
+                if (value.isNotBlank() && !b.phones.contains(value)) {
+                    if (b.phones.size >= MAX_CHANNELS_PER_CONTACT)
+                        throw IllegalStateException("Too many phone numbers on one contact")
+                    b.phones.add(value)
+                }
             }
         }
 
@@ -110,8 +127,12 @@ class ContactsRepository(
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
                 val b = byId[cursor.getLong(idCol)] ?: return@eachRow
-                val value = cursor.getString(valueCol)?.trim().orEmpty()
-                if (value.isNotBlank() && b.emails.none { it.equals(value, true) }) b.emails.add(value)
+                val value = checkedValue(cursor.getString(valueCol))
+                if (value.isNotBlank() && b.emails.none { it.equals(value, true) }) {
+                    if (b.emails.size >= MAX_CHANNELS_PER_CONTACT)
+                        throw IllegalStateException("Too many email addresses on one contact")
+                    b.emails.add(value)
+                }
             }
         }
 
@@ -125,7 +146,7 @@ class ContactsRepository(
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
                 val b = byId[cursor.getLong(idCol)] ?: return@eachRow
-                if (b.organization.isBlank()) b.organization = cursor.getString(valueCol).orEmpty()
+                if (b.organization.isBlank()) b.organization = checkedValue(cursor.getString(valueCol))
             }
         }
 
@@ -139,7 +160,7 @@ class ContactsRepository(
             val nameCol = cursor.getColumnIndexOrThrow(ContactsContract.Groups.TITLE)
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
-                val name = cursor.getString(nameCol).orEmpty()
+                val name = checkedValue(cursor.getString(nameCol))
                 if (name.isNotBlank()) groups.add(GroupEntry(cursor.getLong(idCol), name))
             }
         }
@@ -153,18 +174,17 @@ class ContactsRepository(
             val groupCol = cursor.getColumnIndexOrThrow(CommonDataKinds.GroupMembership.GROUP_ROW_ID)
             eachRow(cursor, signal, maxRelatedRows) {
                 signal.throwIfCanceled()
-                byId[cursor.getLong(idCol)]?.groups?.add(cursor.getLong(groupCol))
+                val contact = byId[cursor.getLong(idCol)] ?: return@eachRow
+                val groupId = cursor.getLong(groupCol)
+                if (groupId !in contact.groups) {
+                    if (contact.groups.size >= MAX_GROUPS_PER_CONTACT)
+                        throw IllegalStateException("Too many group memberships")
+                    contact.groups.add(groupId)
+                }
             }
         }
 
-        // Extended Android Data rows are strictly read-only and memory-bounded.
-        // A failed/malformed query aborts the entire snapshot rather than hiding fields.
-        fun checkedValue(value: String?, limit: Int = 4096): String {
-            val text = value?.trim().orEmpty()
-            if (text.length > limit)
-                throw IllegalStateException("Contact detail exceeds the safe display budget")
-            return text
-        }
+        // Extended Android Data rows remain read-only and memory-bounded.
         requiredQuery(ContactsContract.Data.CONTENT_URI,
             arrayOf(ContactsContract.Data.CONTACT_ID,
                 CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS),
