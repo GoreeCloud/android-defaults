@@ -30,10 +30,15 @@ object VCardImport {
     fun readBounded(source: InputStream): ByteArray {
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(4096)
+        var stalledReads = 0
         while (true) {
             val count = source.read(buffer)
             if (count < 0) break
-            if (count == 0) continue
+            if (count == 0) {
+                require(++stalledReads <= 3) { "Document stream did not advance" }
+                continue
+            }
+            stalledReads = 0
             require(output.size() + count <= MAX_FILE_BYTES) { "Contact file exceeds size limit" }
             output.write(buffer, 0, count)
         }
@@ -89,6 +94,7 @@ object VCardImport {
             val descriptor = line.substring(0, colon)
             val key = descriptor.substringBefore(';').uppercase(Locale.ROOT)
             require(key.matches(Regex("[A-Z0-9-]{1,40}"))) { "Invalid contact field" }
+            require(key != "BEGIN" && key != "END") { "Nested or extra card boundary" }
             val rawValue = line.substring(colon + 1)
             val supported = key in setOf("VERSION", "FN", "TEL", "EMAIL", "ORG")
             if (supported) {
