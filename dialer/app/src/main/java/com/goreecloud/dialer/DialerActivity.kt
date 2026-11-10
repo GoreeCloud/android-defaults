@@ -967,18 +967,13 @@ class DialerActivity : Activity() {
                         null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC",
                         signal
                     )
-                    if (cursor == null) {
-                        // A null Cursor is a provider failure, not a verified
-                        // empty contact list or empty carrier call history.
-                        failed = true
-                    } else cursor.use { cursor ->
-                        while (cursor.moveToNext() && list.size < 1500) {
-                            val number = cursor.getString(1).orEmpty()
-                            val id = cursor.getLong(2)
-                            if (number.isNotBlank() && id > 0L)
-                                list.add(Contact(cursor.getString(0).orEmpty().ifBlank { number }, number, id))
-                        }
-                    }
+                    list.addAll(SnapshotCursorReader.read(cursor, signal, 1500) { row ->
+                        val number = row.getString(1).orEmpty()
+                        val id = row.getLong(2)
+                        if (number.isNotBlank() && id > 0L)
+                            Contact(row.getString(0).orEmpty().ifBlank { number }, number, id)
+                        else null
+                    })
                 } catch (_: RuntimeException) {
                     // Do not present a partly populated result as complete if
                     // an OEM provider fails during cursor iteration.
@@ -1040,16 +1035,10 @@ class DialerActivity : Activity() {
                             CallLog.Calls.NUMBER_PRESENTATION),
                         null, null, "${CallLog.Calls.DATE} DESC", signal
                     )
-                    if (cursor == null) {
-                        // A null Cursor is a provider failure, not a verified
-                        // empty contact list or empty carrier call history.
-                        failed = true
-                    } else cursor.use { cursor ->
-                        while (cursor.moveToNext() && list.size < 150) {
-                            list.add(Recent(cursor.getString(0).orEmpty(), cursor.getInt(1),
-                                cursor.getLong(2), cursor.getLong(3), cursor.getInt(4)))
-                        }
-                    }
+                    list.addAll(SnapshotCursorReader.read(cursor, signal, 150) { row ->
+                        Recent(row.getString(0).orEmpty(), row.getInt(1),
+                            row.getLong(2), row.getLong(3), row.getInt(4))
+                    })
                 } catch (_: RuntimeException) {
                     list.clear()
                     failed = true
