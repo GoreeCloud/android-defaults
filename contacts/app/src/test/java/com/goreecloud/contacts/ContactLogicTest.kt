@@ -119,7 +119,7 @@ class ContactLogicTest {
         assertTrue(ContactLogic.favoriteContacts(all, emptySet()).isEmpty())
     }
 
-    @Test fun extendedDetailsAreSearchableWithoutSharingThem() {
+    @Test fun visibleDetailsRemainSearchableWithoutRevealingPrivateNotes() {
         val entry = ContactEntry(
             id = 33, lookupKey = "synthetic", name = "Taylor",
             addresses = listOf("Memphis, Tennessee"),
@@ -128,7 +128,9 @@ class ContactLogicTest {
         )
         assertTrue(ContactLogic.matches(entry, "memphis"))
         assertTrue(ContactLogic.matches(entry, "birthday"))
-        assertTrue(ContactLogic.matches(entry, "research"))
+        assertFalse(ContactLogic.matches(entry, "research"))
+        assertFalse(ContactLogic.matches(entry, "private"))
+        assertTrue(ContactLogic.matches(entry, "taylor"))
         assertFalse(ContactLogic.matches(entry, "nonmatching"))
         val card = ContactLogic.vCard(entry)
         assertFalse(card.contains("private research context"))
