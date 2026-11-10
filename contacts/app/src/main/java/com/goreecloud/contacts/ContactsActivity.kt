@@ -561,6 +561,36 @@ class ContactsActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
 
+        // Read-only, locally calculated dates; nothing is scheduled or shared.
+        val upcoming = UpcomingDates.list(data.contacts, java.time.LocalDate.now())
+        val upcomingCard = card()
+        upcomingCard.addView(label("Upcoming birthdays & anniversaries", 19f,
+            R.color.ink, true))
+        upcomingCard.addView(label("Next 90 days · calculated locally · no notifications",
+            13f, R.color.muted).apply { setPadding(0, px(8), 0, px(12)) })
+        if (upcoming.isEmpty()) {
+            upcomingCard.addView(label("No upcoming birthdays or anniversaries in this period.",
+                14f, R.color.muted))
+        } else {
+            val formatter = java.time.format.DateTimeFormatter.ofPattern(
+                "MMM d", Locale.getDefault())
+            upcoming.forEach { event ->
+                val whenText = if (event.daysUntil == 0L) "Today"
+                    else event.nextDate.format(formatter) +
+                        " · in " + event.daysUntil + " days"
+                upcomingCard.addView(action(event.contactName + " · " + event.kind +
+                    " · " + whenText) {
+                    selectedContact = event.contactId
+                    tab = "detail"
+                    drawShell()
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(7) })
+            }
+        }
+        container.addView(upcomingCard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = px(12) })
+
         val exportCard = card()
         exportCard.addView(label("Export a copy", 19f, R.color.ink, true))
         exportCard.addView(label("Save a vCard containing names, phones, emails and " +

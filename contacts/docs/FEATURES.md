@@ -21,6 +21,7 @@
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
 | Postal addresses, birthdays, anniversaries, custom dates and notes | Implemented in source; note-privacy CI pending | Read-only bounded Android Data queries; notes hidden by default behind explicit secure dialog; excluded from share/export |
+| Read-only upcoming birthdays and anniversaries | Implemented in source; CI pending | Next 90 days, local calculations, no calendar writes, reminders or age inference |
 | Photos, posters, birthday notifications and rich-field editing | Planned | Android provider/UI and privacy review |
 | Multi-card vCard/CSV import, full export, bulk edit | Planned | Fidelity, permissions, rollback; single-card preview is not full import |
 | Delete, Trash, history, backups and restore | Planned | Data safety and retention design |
@@ -194,3 +195,15 @@ JVM tests verify redacted labels and bounded explicit text disclosure.
 The revealed dialog also sets Android FLAG_SECURE to discourage screenshots and recent-app previews while open; it is not a guarantee against external cameras or all capture methods.
 Android window captures while the dialog is open and real device acceptance
 remain separate release considerations.
+
+**Read-only upcoming dates (this PR):** Tools displays up to twelve
+birthdays and anniversaries occurring within the next 90 days. Computation
+runs locally from the existing in-memory Android Contacts Provider snapshot.
+The pure parser accepts full `YYYY-MM-DD` and yearless `--MM-DD` Android
+values, ignores malformed and unclassified custom dates rather than inventing
+recurrence, and keeps Feb 29 on actual leap years. Sorting and dates use the
+device's local calendar day, do not calculate ages, and never create
+notifications, calendar events, alerts, analytics or server requests.
+JVM regressions cover leap days, malformed dates, date boundaries, result
+limits and deterministic ordering. Real provider/OEM date formatting and
+screen-reader review remain release gates.
