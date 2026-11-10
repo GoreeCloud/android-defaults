@@ -8,6 +8,7 @@
 | Name, number, email and organization search | Implemented in source | Pure JVM matching tests |
 | Accent-insensitive and formatted-phone search; local sort/filter | Implemented in source; CI pending | Read-only view settings: name, organization or favorites-first; with-phone/with-email filters; session/restored-screen state only |
 | Favorites | Implemented in source | App-private preference, not system STARRED; explicit user-confirmed clear-all control (CI pending) |
+| Optional Contacts screen-capture protection | Implemented in draft source; per-head CI required | Explicit confirmation and reversible app-window FLAG_SECURE; disabled by default, note dialogs independently secure |
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
@@ -231,3 +232,15 @@ names are sanitized for control characters, and large clusters are
 explicitly capped. Pure JVM tests verify candidate identity, ordering,
 privacy omissions and limits. No Contacts Provider mutation, deletion,
 merging, telemetry, new permission or network operation is introduced.
+
+**Optional GoreeShield window protection (draft integration):** The Tools view
+allows users to opt in to Android `FLAG_SECURE` with an explicit confirmation.
+The setting defaults OFF to preserve ordinary screenshots, screen sharing and
+accessible workflows unless a user turns it ON. Android blocks many app-window
+captures and recent-app previews while enabled, but cannot stop cameras or
+all OEM capture paths. Disabling after confirmation removes protection from
+normal windows; a separately protected private-note reveal dialog continues
+to use its own `FLAG_SECURE`. Only an app-private Boolean is persisted; Android
+backup remains disabled. Disposable synthetic instrumentation tests cover
+setting defaults, opt in/out, and removal without contact-provider access.
+Physical screenshot, casting and TalkBack behavior are separate release gates.
