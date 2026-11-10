@@ -159,4 +159,29 @@ class ContactLogicTest {
     }
 
 
+    @Test fun duplicatesDoNotCollapseDifferentInternationalCountryCodes() {
+        val a = ContactEntry(100L, "a", "Country A",
+            phones = listOf("+44 234 567 89012"))
+        val b = ContactEntry(101L, "b", "Country B",
+            phones = listOf("+61 234 567 89012"))
+        assertTrue(ContactLogic.duplicateClusters(listOf(a, b)).isEmpty())
+    }
+
+    @Test fun duplicateMatchingRejectsExtensionAmbiguity() {
+        val withExtension = ContactEntry(102L, "ext", "Extension",
+            phones = listOf("+1 205 555 0100 ext 12"))
+        val noExtension = ContactEntry(103L, "basic", "Basic",
+            phones = listOf("(205) 555-0100"))
+        assertTrue(ContactLogic.duplicateClusters(listOf(withExtension, noExtension)).isEmpty())
+    }
+
+    @Test fun duplicateReviewMatchesNanpEquivalentDialStringsWithoutWriting() {
+        val international = ContactEntry(104L, "int", "International",
+            phones = listOf("+1 (205) 555-0100"))
+        val national = ContactEntry(105L, "nat", "National",
+            phones = listOf("2055550100"))
+        assertEquals(1, ContactLogic.duplicateClusters(listOf(international, national)).size)
+    }
+
+
 }

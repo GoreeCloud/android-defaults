@@ -134,3 +134,13 @@ selected destination. Pure JVM regression tests cover accented names,
 emoji/other multibyte characters, and round-trip through the application's
 limited vCard importer. This improves interoperability but does not provide
 full field or multi-contact import fidelity.
+
+**Conservative duplicate review (this PR):** Candidate clusters are built
+from case-insensitive email matches and canonical telephone digits. An
+explicit +1 NANP number may match its ten-digit national form; different
+international prefixes are no longer collapsed merely because their final
+ten digits agree. Short numbers and phone strings with extension markers are
+ignored to reduce misleading matches. This intentionally favors false
+negatives over false-positive recommendations. No automatic merges, deletion
+or Contacts Provider writes are introduced. CI and real-world cross-region
+format validation remain open.
