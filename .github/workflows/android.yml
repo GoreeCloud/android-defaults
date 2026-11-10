@@ -4,6 +4,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: clock-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -90,6 +94,12 @@ jobs:
           assert required <= exclusions(old), "legacy full backup"
           print("Verified explicit cloud, device-transfer, legacy backup exclusions.")
           PY
+      - name: Verify screenshot script syntax and physical-device fail-closed guard
+        shell: bash
+        run: |
+          bash -n clock/scripts/capture-emulator-layouts.sh
+          bash -n clock/scripts/test-capture-guard.sh
+          bash clock/scripts/test-capture-guard.sh
       - name: Unit tests, debug build, Android lint
         run: gradle :clock:testDebugUnitTest :clock:assembleDebug :clock:lintDebug --no-daemon --stacktrace
       - name: Verify APK package, API level and privacy permissions
