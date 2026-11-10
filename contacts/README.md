@@ -12,6 +12,7 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - Call via ACTION_DIAL, compose SMS/email via installed apps, share only after preview and explicit confirmation.
 - Read-only duplicate suggestions by normalized phone/email.
 - User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
+- **Scoped export:** choose favorite contacts or an existing Android group and export only those records as vCard or CSV after explicit confirmation.
 - User-initiated **CSV export** for limited contact fields, preflighted for field/size limits and spreadsheet-formula injection protection before opening a user-selected destination.
 - **Single-contact vCard import preview** for strict UTF-8 vCard 3/4 (up to 128 KiB): choose a file, review supported data and omissions, then open Android's user-confirmed insert editor. No direct provider inserts or automatic bulk import.
 - Offline-only design with no INTERNET, WRITE_CONTACTS, call or SMS permission; no telemetry or server.
