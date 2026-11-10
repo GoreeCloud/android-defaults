@@ -7,11 +7,26 @@ out="clock/build/reports/emulator-screenshots"
 mkdir -p "$out"
 package="com.goreecloud.clock"
 activity="$package/.MainActivity"
+apk="clock/build/outputs/apk/debug/clock-debug.apk"
+
+# connectedDebugAndroidTest may remove its app under test during cleanup.
+# Reinstall the exact debug APK produced in this disposable CI workspace,
+# then verify the target is resolvable before attempting any screenshot.
+test -s "$apk" || { echo "Clock emulator QA APK is missing" >&2; exit 1; }
+adb install -r "$apk" >/dev/null
+adb shell pm path "$package" | grep -q '^package:' || {
+  echo "Clock package could not be resolved after emulator install" >&2
+  exit 1
+}
 
 capture() {
   local label="$1"
+  local launch
   adb shell am force-stop "$package"
-  adb shell am start -W -n "$activity" >/dev/null
+  if ! launch="$(adb shell am start -W -n "$activity" 2>&1)"; then
+    printf 'Clock activity launch failed for %s: %s\n' "$label" "$launch" >&2
+    return 1
+  fi
   sleep 3
   adb exec-out screencap -p > "$out/$label.png"
 }
