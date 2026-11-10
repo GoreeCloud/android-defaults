@@ -16,7 +16,11 @@ object CsvContactsExport {
             Character.isISOControl(it) && it != '\r' && it != '\n' && it != '\t'
         }) { "Invalid CSV control character" }
         val candidate = original.dropWhile {
-            it.isWhitespace() || Character.isISOControl(it) || it == '\u200B' || it == '\uFEFF'
+            // Unicode format marks (Cf) include zero-width joiners, direction
+            // marks and BOM. Some spreadsheet engines hide these before a
+            // formula prefix; treat them as ignorable for injection checks.
+            it.isWhitespace() || Character.isISOControl(it) ||
+                Character.getType(it) == Character.FORMAT.toInt()
         }
         val risky = candidate.firstOrNull() in listOf('=', '+', '-', '@')
         val value = if (risky) "'" + original else original
