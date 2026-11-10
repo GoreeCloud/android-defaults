@@ -20,7 +20,7 @@
 | Single vCard import preview | Source and API26/35/36 emulator CI passed in PR #24; OEM editor acceptance open | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
-| Postal addresses, birthdays, anniversaries, custom dates and notes | Implemented in source; CI pending | Read-only bounded Android Data queries; search/detail display; deliberately excluded from current share/export |
+| Postal addresses, birthdays, anniversaries, custom dates and notes | Implemented in source; note-privacy CI pending | Read-only bounded Android Data queries; notes hidden by default behind explicit secure dialog; excluded from share/export |
 | Photos, posters, birthday notifications and rich-field editing | Planned | Android provider/UI and privacy review |
 | Multi-card vCard/CSV import, full export, bulk edit | Planned | Fidelity, permissions, rollback; single-card preview is not full import |
 | Delete, Trash, history, backups and restore | Planned | Data safety and retention design |
@@ -183,3 +183,14 @@ synthetic preference file to verify toggling, key isolation, explicit erasure
 and cleanup without reading a personal Contacts Provider. Android backup
 exclusions remain unchanged. The action is intentionally irreversible for
 local markers, though contacts may be favorited again.
+
+**Private notes reveal-on-demand (this PR):** Contact notes never appear
+inline on the default contact profile. Instead the profile shows only a
+count and a `Reveal private notes` action. The user must open a transient
+Android dialog to view the notes and can close it with `Hide notes`.
+No reveal flag, note text or note-history is persisted in preferences, and
+notes remain excluded from external share, vCard/CSV and map handoff. Pure
+JVM tests verify redacted labels and bounded explicit text disclosure.
+The revealed dialog also sets Android FLAG_SECURE to discourage screenshots and recent-app previews while open; it is not a guarantee against external cameras or all capture methods.
+Android window captures while the dialog is open and real device acceptance
+remain separate release considerations.

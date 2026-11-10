@@ -742,11 +742,13 @@ class ContactsActivity : Activity() {
                     setPadding(0, px(3), 0, px(14))
                 })
             }
-            c.notes.forEach { note ->
-                extended.addView(label("Note (private)", 12f, R.color.muted, true))
-                extended.addView(label(note, 15f, R.color.ink).apply {
-                    setPadding(0, px(3), 0, px(14))
-                })
+            if (c.notes.isNotEmpty()) {
+                extended.addView(label(PrivateNotes.hiddenLabel(c.notes),
+                    13f, R.color.muted).apply { setPadding(0, px(3), 0, px(7)) })
+                extended.addView(action("Reveal private notes") {
+                    showPrivateNotes(c.notes)
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(14) })
             }
             content.addView(extended, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -830,6 +832,28 @@ class ContactsActivity : Activity() {
                     "Open address with"))
             }
             .show()
+    }
+
+    /**
+     * Explicit GoreeShield on-screen disclosure. No persistently revealed state;
+     * closing the dialog removes the raw notes from visible UI.
+     */
+    private fun showPrivateNotes(notes: List<String>) {
+        val text = try {
+            PrivateNotes.reveal(notes)
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(this, "Private notes unavailable", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Private contact notes")
+            .setMessage(text)
+            .setPositiveButton("Hide notes", null)
+            .create().apply {
+                show()
+                // Secure only the disclosed sensitive-content window.
+                window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
     }
 
     private fun confirmShare(c: ContactEntry) {
