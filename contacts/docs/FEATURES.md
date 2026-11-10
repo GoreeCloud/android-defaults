@@ -12,10 +12,11 @@
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
 | Contact sharing | Implemented in source | Text preview and user-selected recipient |
 | Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
+| Single vCard import preview | Implemented in source; CI pending | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
 | Rich data fields, photos, posters, birthdays | Planned | Android provider/UI support and privacy review |
-| CSV/vCard import, full export, bulk edit | Planned | Fidelity, permissions, rollback |
+| Multi-card vCard/CSV import, full export, bulk edit | Planned | Fidelity, permissions, rollback; single-card preview is not full import |
 | Delete, Trash, history, backups and restore | Planned | Data safety and retention design |
 | Group writes, ringtones, SIM moves | Planned | New Android manage-contacts permissions review |
 | Widgets, QR exchange | Planned | Platform API and privacy design |
@@ -57,3 +58,14 @@ Screenshot review, TalkBack, dynamic type beyond 1.5×, RTL, tablet/landscape,
 and genuine OEM use remain independent quality gates. Initial CI pending.
 
 **Quality gates:** No network/write/SMS/call permissions; explicit sharing and export; pure JVM tests; packaged APK/lint; disposable emulator smoke. Real OEM provider, physical device, accessibility, visual acceptance, release and sync remain unverified.
+
+**Limited vCard import path (new, CI pending):** File selection uses the
+system document picker. An application-worker bounded reader accepts at most
+128 KiB of strict UTF-8 (vCard 3.0 or 4.0) and **exactly one card**. A pure
+parser rejects malformed or unknown-encoding supported fields, excessively long
+lines, oversized fields, multi-card documents and excessive phone/email values.
+The preview clearly lists supported fields and counts omitted properties.
+Only after affirmative approval is a prefilled Android contact-insert editor
+opened; the user still chooses the account and taps Save. The app does not
+write Contacts Provider records itself. This does **not** claim full import,
+RFC-complete fidelity or safe import of external attachments/photos.
