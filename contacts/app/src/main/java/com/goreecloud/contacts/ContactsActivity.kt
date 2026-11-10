@@ -56,7 +56,7 @@ class ContactsActivity : Activity() {
     private var pendingExport: List<ContactEntry>? = null
     private val worker = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
         ArrayBlockingQueue<Runnable>(2), ThreadPoolExecutor.AbortPolicy())
-    private val favorites by lazy { getSharedPreferences("favorites_local", MODE_PRIVATE) }
+    private val favorites by lazy { LocalFavorites(getSharedPreferences("favorites_local", MODE_PRIVATE)) }
     private val permissionCode = 41
     private val exportCode = 42
     private val importCode = 43
@@ -639,6 +639,9 @@ class ContactsActivity : Activity() {
             "analytics or background cloud synchronization. Favorites remain " +
             "in private app storage and are excluded from Android backups.",
             14f, R.color.muted).apply { setPadding(0, px(8), 0, px(4)) })
+        privacy.addView(label(favoriteKeys().size.toString() + " app-local favorite markers",
+            13f, R.color.muted).apply { setPadding(0, px(10), 0, px(10)) })
+        privacy.addView(action("Clear app-local favorites") { confirmClearLocalFavorites() })
         container.addView(privacy)
         scroll.addView(container)
         body.addView(scroll, LinearLayout.LayoutParams(
@@ -778,13 +781,28 @@ class ContactsActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
-    private fun favoriteKeys(): Set<String> =
-        favorites.getStringSet("keys", emptySet())?.toSet().orEmpty()
-    private fun favoriteKey(c: ContactEntry) = c.lookupKey.ifBlank { "id:" + c.id }
-    private fun toggleFavorite(c: ContactEntry) {
-        val keys = favoriteKeys().toMutableSet()
-        if (!keys.add(favoriteKey(c))) keys.remove(favoriteKey(c))
-        favorites.edit().putStringSet("keys", keys).apply()
+    private fun favoriteKeys(): Set<String> = favorites.keys()
+    private fun favoriteKey(c: ContactEntry) = LocalFavorites.keyFor(c)
+    private fun toggleFavorite(c: ContactEntry) = favorites.toggle(c)
+
+    private fun confirmClearLocalFavorites() {
+        val count = favoriteKeys().size
+        if (count == 0) {
+            Toast.makeText(this, "No local favorites to clear", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Clear " + count + " app-local favorites?")
+            .setMessage("This removes only GoreeCloud Contacts' private favorite markers. " +
+                "It does NOT remove contacts, change Android's starred favorites, " +
+                "or change any account. You can mark contacts as favorites again.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Clear local favorites") { _, _ ->
+                favorites.clear()
+                drawBody()
+                Toast.makeText(this, "Local favorites cleared", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     private fun createContact() {

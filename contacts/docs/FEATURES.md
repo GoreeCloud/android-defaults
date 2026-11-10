@@ -7,7 +7,7 @@
 | Native Android directory | Implemented in source | Permission-gated background Contacts Provider reads |
 | Name, number, email and organization search | Implemented in source | Pure JVM matching tests |
 | Accent-insensitive and formatted-phone search; local sort/filter | Implemented in source; CI pending | Read-only view settings: name, organization or favorites-first; with-phone/with-email filters; session/restored-screen state only |
-| Favorites | Implemented in source | App-private preference, not system STARRED |
+| Favorites | Implemented in source | App-private preference, not system STARRED; explicit user-confirmed clear-all control (CI pending) |
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
@@ -173,3 +173,13 @@ availability and physical-device handoff acceptance remain unverified.
 The initial isolated implementation passed JVM tests, APK build, Lint and
 Android 26/35/36 emulator CI. Verification of the branch after rebasing onto
 the merged selective-sharing change is tracked independently in this PR.
+
+**Local favorites privacy control (this PR):** Tools shows a count of
+app-private favorite markers and a separately confirmed `Clear app-local
+favorites` action. The action removes only the `keys` preference entry; it
+does not delete contact records, write Android STARRED, modify accounts, or
+remove real phone numbers. An instrumentation test uses a disposable
+synthetic preference file to verify toggling, key isolation, explicit erasure
+and cleanup without reading a personal Contacts Provider. Android backup
+exclusions remain unchanged. The action is intentionally irreversible for
+local markers, though contacts may be favorited again.
