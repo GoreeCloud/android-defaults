@@ -46,4 +46,14 @@ document provider or storage fails **after** it opens the file; inspect and
 delete any partial destination manually. It does not preserve fields absent
 from the limited vCard representation. Signing and restore fidelity remain open.
 
+**Cross-version visual gate (development CI):** An isolated Android API 26/35/36
+emulator matrix now exercises the installed Contacts package with instrumentation
+and captures its **permission-denied empty state** under default and 1.5× font scale
+plus system dark mode where available (API 35/36). The capture script explicitly
+refuses non-emulators, clears only the disposable emulator's Contacts app, and
+does not grant permissions or read real contacts. UI hierarchy visibility is
+checked before each screenshot; diagnostics on failure are not acceptance.
+Screenshot review, TalkBack, dynamic type beyond 1.5×, RTL, tablet/landscape,
+and genuine OEM use remain independent quality gates. Initial CI pending.
+
 **Quality gates:** No network/write/SMS/call permissions; explicit sharing and export; pure JVM tests; packaged APK/lint; disposable emulator smoke. Real OEM provider, physical device, accessibility, visual acceptance, release and sync remain unverified.
