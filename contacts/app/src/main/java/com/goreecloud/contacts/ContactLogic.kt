@@ -121,19 +121,43 @@ object ContactLogic {
         .replace(",", "\\,")
     }
 
+    /**
+     * RFC vCard physical lines have a 75-octet folding limit. Never split
+     * UTF-8 multi-byte code points; continuation space counts toward 75.
+     */
+    private fun StringBuilder.appendFoldedVCardLine(property: String) {
+        var used = 0
+        var offset = 0
+        while (offset < property.length) {
+            val point = Character.codePointAt(property, offset)
+            require(point !in 0xD800..0xDFFF) { "Invalid Unicode surrogate in contact field" }
+            val text = String(Character.toChars(point))
+            val bytes = text.toByteArray(Charsets.UTF_8).size
+            if (used + bytes > 75) {
+                append("\r\n ")
+                used = 1
+            }
+            append(text)
+            used += bytes
+            offset += Character.charCount(point)
+        }
+        append("\r\n")
+    }
+
     /** Export deliberately includes only fields represented by this MVP snapshot. */
     fun vCard(contact: ContactEntry): String = buildString {
         require(contact.phones.size <= MAX_FIELDS_PER_KIND && contact.emails.size <= MAX_FIELDS_PER_KIND) {
             "Contact has too many phone or email fields"
         }
-        append("BEGIN:VCARD\r\nVERSION:3.0\r\n")
-        append("FN:").append(escapeVCard(contact.name)).append("\r\n")
-        contact.phones.forEach { append("TEL:").append(escapeVCard(it)).append("\r\n") }
-        contact.emails.forEach { append("EMAIL:").append(escapeVCard(it)).append("\r\n") }
+        appendFoldedVCardLine("BEGIN:VCARD")
+        appendFoldedVCardLine("VERSION:3.0")
+        appendFoldedVCardLine("FN:" + escapeVCard(contact.name))
+        contact.phones.forEach { appendFoldedVCardLine("TEL:" + escapeVCard(it)) }
+        contact.emails.forEach { appendFoldedVCardLine("EMAIL:" + escapeVCard(it)) }
         if (contact.organization.isNotBlank()) {
-            append("ORG:").append(escapeVCard(contact.organization)).append("\r\n")
+            appendFoldedVCardLine("ORG:" + escapeVCard(contact.organization))
         }
-        append("END:VCARD\r\n")
+        appendFoldedVCardLine("END:VCARD")
         require(length <= MAX_CARD_BYTES) { "Contact export exceeds the size budget" }
     }
 }
