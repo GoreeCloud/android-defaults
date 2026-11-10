@@ -163,9 +163,30 @@ object VCardImport {
             require(value.length <= maxLength) { "Imported field too long" }
             i++
         }
-        require(value.none { Character.isISOControl(it) && it != '\n' }) {
+        val decoded = value.toString()
+        require(decoded.none { Character.isISOControl(it) && it != '\n' }) {
             "Invalid imported field"
         }
-        return value.toString()
+        var index = 0
+        while (index < decoded.length) {
+            val char = decoded[index]
+            // Parsing UTF-8 bytes already rejects malformed Unicode. Preserve
+            // the same invariant for direct parseText calls and never silently
+            // repair a lone surrogate in the editor handoff.
+            if (Character.isSurrogate(char) &&
+                (!Character.isHighSurrogate(char) || index + 1 >= decoded.length ||
+                    !Character.isLowSurrogate(decoded[index + 1]))) {
+                throw IllegalArgumentException("Invalid Unicode contact field")
+            }
+            val code = Character.codePointAt(decoded, index)
+            // These controls can reverse the preview or visually split a
+            // field from its label even though they are not ISO controls.
+            require(code != 0x061C && code != 0x200E && code != 0x200F &&
+                code !in 0x2028..0x202E && code !in 0x2066..0x2069) {
+                "Invalid Unicode display control"
+            }
+            index += Character.charCount(code)
+        }
+        return decoded
     }
 }

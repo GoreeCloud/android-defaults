@@ -93,8 +93,14 @@ lines, oversized fields, multi-card documents and excessive phone/email values.
 The preview clearly lists supported fields and counts omitted properties.
 Only after affirmative approval is a prefilled Android contact-insert editor
 opened; the user still chooses the account and taps Save. The app does not
-write Contacts Provider records itself. This does **not** claim full import,
-RFC-complete fidelity or safe import of external attachments/photos.
+write Contacts Provider records itself. The limited FN/TEL/EMAIL/ORG
+preview rejects bidi formatting/isolate controls, Unicode line/paragraph
+separators and malformed UTF-16 rather than copying visually deceptive or
+lossy fields into the prefilled editor; ordinary international text, escaped
+vCard newlines and valid supplementary Unicode remain supported. This
+conservative policy may reject otherwise displayable vCards containing bidi
+formatting marks; it does **not** silently rewrite source fields or claim full
+import, RFC-complete fidelity or safe import of external attachments/photos.
 
 **Limited CSV export:** User-selected `text/csv` destination and explicit
 confirmation. Values are quoted for CSV, leading formula-like payloads are
