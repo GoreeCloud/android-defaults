@@ -12,6 +12,7 @@
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
 | Contact sharing | Implemented in source | Text preview and user-selected recipient |
 | Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
+| Limited CSV export | Implemented in source; CI pending | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
 | Single vCard import preview | Implemented in source; CI pending | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
@@ -69,3 +70,11 @@ Only after affirmative approval is a prefilled Android contact-insert editor
 opened; the user still chooses the account and taps Save. The app does not
 write Contacts Provider records itself. This does **not** claim full import,
 RFC-complete fidelity or safe import of external attachments/photos.
+
+**Limited CSV export:** User-selected `text/csv` destination and explicit
+confirmation. Values are quoted for CSV, leading formula-like payloads are
+prefixed with a literal apostrophe, and all rows are preflighted against
+field, count and byte limits before the document is opened. Multiple
+phone/email values are joined in one column, so this is deliberately not a
+round-trip backup. External document providers can still leave a partial
+file if writing fails after opening; no atomicity or encryption is claimed.

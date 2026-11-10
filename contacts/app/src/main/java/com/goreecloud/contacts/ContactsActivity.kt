@@ -58,6 +58,7 @@ class ContactsActivity : Activity() {
     private val permissionCode = 41
     private val exportCode = 42
     private val importCode = 43
+    private val csvExportCode = 44
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -500,6 +501,16 @@ class ContactsActivity : Activity() {
         container.addView(exportCard, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = px(12) })
+        val csvCard = card()
+        csvCard.addView(label("Export a spreadsheet", 19f, R.color.ink, true))
+        csvCard.addView(label("Create a limited CSV copy with names, joined phone numbers, " +
+            "emails and organizations. Formula-like cells are escaped for spreadsheet safety.",
+            14f, R.color.muted).apply { setPadding(0, px(8), 0, px(14)) })
+        csvCard.addView(action("Save CSV export") { confirmCsvExport(data.contacts) })
+        container.addView(csvCard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = px(12) })
+
         
         val importCard = card()
         importCard.addView(label("Import a contact", 19f, R.color.ink, true))
@@ -793,6 +804,37 @@ class ContactsActivity : Activity() {
             }.show()
     }
 
+    private fun confirmCsvExport(contacts: List<ContactEntry>) {
+        if (contacts.isEmpty() || contacts.size > CsvContactsExport.MAX_ROWS) {
+            Toast.makeText(this, "CSV export count is not supported", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Export " + contacts.size + " contacts to CSV?")
+            .setMessage("The CSV contains names, phone numbers, email addresses and organizations. " +
+                "Multiple values are joined in one cell. It is not a complete contact backup. " +
+                "You control the destination, which may be cloud-backed.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Choose location") { _, _ ->
+                pendingExport = contacts.toList()
+                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "text/csv"
+                    putExtra(Intent.EXTRA_TITLE, "GoreeCloud-Contacts.csv")
+                }
+                try {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(intent, csvExportCode)
+                } catch (_: ActivityNotFoundException) {
+                    pendingExport = null
+                    Toast.makeText(this, "No document picker available", Toast.LENGTH_LONG).show()
+                } catch (_: SecurityException) {
+                    pendingExport = null
+                    Toast.makeText(this, "Document access unavailable", Toast.LENGTH_LONG).show()
+                }
+            }.show()
+    }
+
     @Deprecated("Android callback retained for API 26–35, no extra library required")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -800,7 +842,7 @@ class ContactsActivity : Activity() {
             if (resultCode == RESULT_OK) data?.data?.let { readImportedCard(it) }
             return
         }
-        if (requestCode != exportCode) return
+        if (requestCode != exportCode && requestCode != csvExportCode) return
         val requested = pendingExport
         pendingExport = null
         val destination = data?.data
@@ -811,17 +853,24 @@ class ContactsActivity : Activity() {
                     // Refuse malformed or over-budget contact data before
                     // creating/opening a document. Never start a partial export
                     // just because a later contact is too large.
-                    ContactLogic.validateExport(requested)
+                    val csv = requestCode == csvExportCode
+                    if (csv) CsvContactsExport.validate(requested)
+                    else ContactLogic.validateExport(requested)
                     val stream = contentResolver.openOutputStream(destination, "wt")
                         ?: throw IllegalStateException("Document cannot be opened")
                     OutputStreamWriter(stream, Charsets.UTF_8).use { writer ->
-                        requested.forEach { writer.write(ContactLogic.vCard(it)) }
+                        if (csv) {
+                            writer.write(CsvContactsExport.header)
+                            requested.forEach { writer.write(CsvContactsExport.row(it)) }
+                        } else {
+                            requested.forEach { writer.write(ContactLogic.vCard(it)) }
+                        }
                     }
                     true
                 } catch (_: Exception) { false }
                 runOnUiThread {
                     if (!destroyed) Toast.makeText(this,
-                        if (success) "vCard exported" else "Export refused or interrupted; check the chosen document",
+                        if (success) "Contact copy exported" else "Export refused or interrupted; check the chosen document",
                         Toast.LENGTH_LONG).show()
                 }
             }
