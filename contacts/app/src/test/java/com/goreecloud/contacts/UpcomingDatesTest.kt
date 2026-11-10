@@ -92,5 +92,36 @@ class UpcomingDatesTest {
         assertEquals(2L, result.single().contactId)
     }
 
+    @Test fun tiedEventsRetainOriginalArrivalOrderAfterHeapReplacement() {
+        val sameContact = ContactEntry(8, "test8", "Sam",
+            importantDates = listOf(
+                ImportantDate("Birthday", "--11-12"),
+                ImportantDate("Anniversary", "--11-12")
+            ))
+        val items = listOf(contact(2, "Birthday", "--12-30"), sameContact)
+        val result = UpcomingDates.list(items, LocalDate.of(2026, 11, 9),
+            horizonDays = 90, maxResults = 2)
+        assertEquals(listOf("Birthday", "Anniversary"), result.map { it.kind })
+        assertEquals(listOf(8L, 8L), result.map { it.contactId })
+    }
+
+    @Test fun boundedHeapMatchesStableGlobalSortAcrossSixHundredSyntheticContacts() {
+        val today = LocalDate.of(2026, 11, 9)
+        val dates = listOf("--11-09", "--11-10", "--11-11", "--11-12",
+            "--12-01", "--12-30", "--02-29", "--04-01", "--01-03")
+        val entries = (1L..600L).map { id ->
+            contact(id, if (id % 3L == 0L) "Anniversary" else "Birthday",
+                dates[(id % dates.size).toInt()])
+        }.reversed()
+        val full = entries.flatMap {
+            UpcomingDates.list(listOf(it), today, horizonDays = 366, maxResults = 50)
+        }.sortedWith(compareBy<UpcomingDate> { it.nextDate }
+            .thenBy { it.contactName.lowercase(java.util.Locale.ROOT) }
+            .thenBy { it.contactId })
+        for (limit in listOf(1, 2, 12, 50)) {
+            assertEquals(full.take(limit),
+                UpcomingDates.list(entries, today, horizonDays = 366, maxResults = limit))
+        }
+    }
 
 }
