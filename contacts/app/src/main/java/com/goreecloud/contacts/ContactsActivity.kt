@@ -451,12 +451,21 @@ class ContactsActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
+    /** One holder per recycled ListView cell. Never retain the contact model in a View. */
+    private class ContactRowViews(
+        val avatar: TextView,
+        val title: TextView,
+        val description: TextView,
+        val indicator: TextView
+    )
+
     private inner class ContactAdapter(private val items: List<ContactEntry>) : BaseAdapter() {
         override fun getCount() = items.size
         override fun getItem(position: Int): Any = items[position]
         override fun getItemId(position: Int) = items[position].id
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val entry = items[position]
+        override fun hasStableIds(): Boolean = true
+
+        private fun makeRow(): LinearLayout {
             val row = LinearLayout(this@ContactsActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -464,28 +473,43 @@ class ContactsActivity : Activity() {
                 background = shape(R.color.surface, 18, R.color.outline)
                 minimumHeight = px(78)
             }
-            val avatar = label(entry.name.take(1).uppercase(Locale.getDefault()), 20f,
-                R.color.accent, true).apply {
+            val avatar = label("", 20f, R.color.accent, true).apply {
                 gravity = Gravity.CENTER
                 background = shape(R.color.avatar, 18)
             }
             row.addView(avatar, LinearLayout.LayoutParams(px(46), px(46)))
-            val texts = column().apply {
-                setPadding(px(14), 0, 0, 0)
-                addView(label(entry.name, 16f, R.color.ink, true).apply {
-                    maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-                })
-                val description = entry.organization.ifBlank {
-                    entry.phones.firstOrNull() ?: entry.emails.firstOrNull() ?: "Contact"
-                }
-                addView(label(description, 13f, R.color.muted).apply {
-                    maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-                })
+            val details = column().apply { setPadding(px(14), 0, 0, 0) }
+            val title = label("", 16f, R.color.ink, true).apply {
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
             }
-            row.addView(texts, LinearLayout.LayoutParams(0,
+            val subtitle = label("", 13f, R.color.muted).apply {
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            details.addView(title)
+            details.addView(subtitle)
+            row.addView(details, LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(label(if (favoriteKey(entry) in favoriteKeys()) "★" else "›",
-                21f, R.color.accent, true))
+            val indicator = label("", 21f, R.color.accent, true)
+            row.addView(indicator)
+            row.tag = ContactRowViews(avatar, title, subtitle, indicator)
+            return row
+        }
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val entry = items[position]
+            val row = (convertView as? LinearLayout)
+                ?.takeIf { it.tag is ContactRowViews } ?: makeRow()
+            val views = row.tag as ContactRowViews
+            // Every user-visible value is rebound; stale recycled rows never
+            // display an old person's name, contact details, or favorite state.
+            views.avatar.text = entry.name.take(1).uppercase(Locale.getDefault())
+            views.title.text = entry.name
+            views.description.text = entry.organization.ifBlank {
+                entry.phones.firstOrNull() ?: entry.emails.firstOrNull() ?: "Contact"
+            }
+            views.indicator.text = if (favoriteKey(entry) in favoriteKeys()) "★" else "›"
             row.contentDescription = entry.name + ", open contact details"
             return row
         }
