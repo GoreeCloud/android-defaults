@@ -73,8 +73,21 @@ jobs:
           for use in uses:
               name, sha = use.rsplit("@", 1)
               assert pins.get(name) == sha and len(sha) == 40, use
-          assert len(uses) == 8
+          assert len(uses) == 9
           print("Android Contacts source privacy, backup and workflow action pin policies passed")
+          PY
+      - name: Verify screenshot script syntax and invalid API refusal
+        run: |
+          bash -n contacts/ci/capture-emulator.sh
+          if bash contacts/ci/capture-emulator.sh invalid > /tmp/contacts-screenshot-probe.txt 2>&1; then
+            echo "Contacts screenshot script accepted an invalid API" >&2
+            exit 1
+          fi
+          grep -Fq 'Unsupported disposable emulator API level.' /tmp/contacts-screenshot-probe.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path("contacts/ci/capture-emulator.sh").read_text()
+          assert r"\${" not in text, "Accidentally escaped Bash parameter expansion"
           PY
       - name: JVM tests, APK assembly, Android Lint
         working-directory: contacts
@@ -107,6 +120,10 @@ jobs:
     needs: contacts
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35, 36]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -123,11 +140,20 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Run Android 35 emulator smoke
+      - name: Run Android ${{ matrix.api }} emulator smoke and visual QA capture
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          script: gradle -p contacts :app:connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            gradle -p contacts :app:connectedDebugAndroidTest --no-daemon --stacktrace
+            bash contacts/ci/capture-emulator.sh ${{ matrix.api }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: goreecloud-contacts-android-${{ matrix.api }}-screens
+          path: contacts/build/emulator-screenshots/**/*.png
+          if-no-files-found: warn
+          retention-days: 7
