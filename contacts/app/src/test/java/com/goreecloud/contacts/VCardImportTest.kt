@@ -16,6 +16,37 @@ class VCardImportTest {
         catch (_: java.nio.charset.CharacterCodingException) {}
     }
 
+    @Test fun importedPreviewRejectsBidiAndUnicodeLineSpoofingInSupportedFields() {
+        val controls = listOf(0x061C, 0x200E, 0x200F, 0x2028, 0x2029,
+            0x202A, 0x202E, 0x2066, 0x2069)
+        for (code in controls) {
+            val control = String(Character.toChars(code))
+            rejects(card("FN:QA${control}Contact\r\n"))
+            rejects(card("FN:QA\r\nTEL:555${control}0100\r\n"))
+            rejects(card("FN:QA\r\nEMAIL:qa${control}@example.test\r\n"))
+            rejects(card("FN:QA\r\nORG:QA${control}Company\r\n"))
+        }
+    }
+
+    @Test fun directTextParserRejectsLoneSurrogatesButKeepsValidUnicode() {
+        val invalid = listOf(
+            String(charArrayOf(0xD800.toChar())),
+            String(charArrayOf(0xDC00.toChar())),
+            String(charArrayOf('A', 0xD83D.toChar(), 'B'))
+        )
+        for (part in invalid) {
+            val text = "BEGIN:VCARD\nVERSION:3.0\nFN:QA ${part}\nEND:VCARD\n"
+            try {
+                VCardImport.parseText(text)
+                fail("Malformed UTF-16 must not enter the editor preview")
+            } catch (_: IllegalArgumentException) { }
+        }
+        val emoji = String(Character.toChars(0x1F600))
+        val imported = VCardImport.parse(card("FN:QA ${emoji}\r\nORG:Company ${emoji}\r\n"))
+        assertEquals("QA ${emoji}", imported.name)
+        assertEquals("Company ${emoji}", imported.organization)
+    }
+
     @Test fun parsesSingleCardWithFoldedLinesAndEscapes() {
         val preview = VCardImport.parse(card(
             "FN:Renée Rivera\r\nTEL;TYPE=HOME:+12055550100\r\n" +
