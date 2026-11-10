@@ -205,5 +205,7 @@ recurrence, and keeps Feb 29 on actual leap years. Sorting and dates use the
 device's local calendar day, do not calculate ages, and never create
 notifications, calendar events, alerts, analytics or server requests.
 JVM regressions cover leap days, malformed dates, date boundaries, result
-limits and deterministic ordering. Real provider/OEM date formatting and
-screen-reader review remain release gates.
+limits and deterministic ordering. The upcoming-date implementation passed
+its initial branch CI; the rebased-head CI still requires verification before
+merge. Real provider/OEM date formatting and screen-reader review remain
+release gates.
