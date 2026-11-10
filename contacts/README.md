@@ -9,10 +9,10 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - On-device Android Contacts Provider read with explicit READ_CONTACTS runtime consent. No contact data upload.
 - Accent-insensitive search of names, organizations and local details, including phone-digit matching across formatting; selectable name/organization/favorites-first sorting and with-phone/with-email filters; app-local favorites and read-only Android groups.
 - Profile cards with phone/email/organization and locally read formatted addresses, important dates and notes; add/edit through Android system contact intents. Private extended details remain absent from the current share and export paths.
-- Call via ACTION_DIAL, compose SMS/email via installed apps, share only after preview and explicit confirmation.
+- Call via ACTION_DIAL and compose SMS/email via installed apps; selectively share individual name/phone/email fields with none preselected, explicit payload preview and a recipient-app chooser. Private notes and addresses remain excluded.
 - Read-only duplicate suggestions by normalized phone/email.
 - User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
-- **Scoped export:** choose favorite contacts or an existing Android group and export only those records as vCard or CSV after explicit confirmation.
+- **Scoped export:** choose an individual profile, favorites or an existing Android group and export only those records as vCard or CSV after explicit confirmation.
 - User-initiated **CSV export** for limited contact fields, preflighted for field/size limits and spreadsheet-formula injection protection before opening a user-selected destination.
 - **Single-contact vCard import preview** for strict UTF-8 vCard 3/4 (up to 128 KiB): choose a file, review supported data and omissions, then open Android's user-confirmed insert editor. No direct provider inserts or automatic bulk import.
 - Offline-only design with no INTERNET, WRITE_CONTACTS, call or SMS permission; no telemetry or server.

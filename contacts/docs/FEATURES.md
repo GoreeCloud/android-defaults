@@ -11,7 +11,8 @@
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
-| Contact sharing | Implemented in source | Text preview and user-selected recipient |
+| Contact sharing | Implemented in source | Affirmative field selection (none preselected), exact preview, then recipient app chooser; no notes/addresses |
+| Single-contact vCard/CSV export from profile | Implemented in source; CI pending | Uses existing size/field validation, confirmation and user-chosen SAF destination |
 | Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
 | Favorite/group-scoped exports | Implemented in source; CI pending | Explicit subset selection followed by existing export confirmations and SAF destination; no background transfers |
 | Limited CSV export | Implemented in source; per-commit CI required | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
@@ -144,3 +145,16 @@ ignored to reduce misleading matches. This intentionally favors false
 negatives over false-positive recommendations. No automatic merges, deletion
 or Contacts Provider writes are introduced. CI and real-world cross-region
 format validation remain open.
+
+**Selective sharing and one-person exports (this PR):** From a contact
+profile, the user can select individual name, telephone or email fields to
+share. **Nothing is preselected**; only the affirmative selections appear in
+an exact second-stage preview before the system recipient chooser. The
+share payload removes control-character line breaks and refuses malformed or
+oversized values. Organization, private notes, addresses, dates, account
+information and other unselected details are excluded. The profile also
+offers vCard or CSV export of **that single contact only**, reusing the
+existing explicit document-location picker, count/size preflight and limited
+field formats. No background transfer, new permission, provider write or
+implicit remote destination is introduced. Real receiver-app tests and
+accessibility remain independent acceptance gates.

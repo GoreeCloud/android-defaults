@@ -760,6 +760,14 @@ class ContactsActivity : Activity() {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(8) })
         management.addView(action("Share selected details") { confirmShare(c) })
+        management.addView(action("Export this contact as vCard") {
+            confirmExport(listOf(c))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) })
+        management.addView(action("Export this contact as CSV") {
+            confirmCsvExport(listOf(c))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) })
         content.addView(management)
         scroll.addView(content)
         body.addView(scroll, LinearLayout.LayoutParams(
@@ -782,20 +790,51 @@ class ContactsActivity : Activity() {
     }
 
     private fun confirmShare(c: ContactEntry) {
-        val text = buildString {
-            append(c.name)
-            c.phones.forEach { append("\nPhone: ").append(it) }
-            c.emails.forEach { append("\nEmail: ").append(it) }
+        val fields = try {
+            ContactShare.choices(c)
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(this, "Too many details to share", Toast.LENGTH_LONG).show()
+            return
         }
+        // GoreeShield: no personal field is preselected. The recipient app
+        // receives only the user-checked subset, after a second exact preview.
+        val checked = BooleanArray(fields.size)
+        val descriptions = fields.map { field ->
+            val preview = field.value
+                .replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+            field.kind.label + ": " + preview.take(96) +
+                if (preview.length > 96) "…" else ""
+        }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("Share this contact?")
-            .setMessage("The receiving application will get these details:\n\n" + text)
+            .setTitle("Choose details to share")
+            .setMultiChoiceItems(descriptions, checked) { _, index, enabled ->
+                checked[index] = enabled
+            }
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Choose app") { _, _ ->
-                launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
-                }, "Share contact"))
+            .setPositiveButton("Preview selection") { _, _ ->
+                val selected = checked.indices.filter { checked[it] }.toSet()
+                if (selected.isEmpty()) {
+                    Toast.makeText(this, "Select at least one detail", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                val text = try {
+                    ContactShare.format(fields, selected)
+                } catch (_: IllegalArgumentException) {
+                    Toast.makeText(this, "Invalid or oversized share selection",
+                        Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm shared details")
+                    .setMessage("Only these details will be sent to the app you choose:\n\n" + text)
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Choose receiving app") { _, _ ->
+                        launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        }, "Share selected contact details"))
+                    }
+                    .show()
             }.show()
     }
 
