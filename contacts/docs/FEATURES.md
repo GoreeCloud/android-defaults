@@ -8,6 +8,7 @@
 | Name, number, email and organization search | Implemented in source | Pure JVM matching tests |
 | Accent-insensitive and formatted-phone search; local sort/filter | Implemented in source; CI pending | Read-only view settings: name, organization or favorites-first; with-phone/with-email filters; session/restored-screen state only |
 | Favorites | Implemented in source | App-private preference, not system STARRED; explicit user-confirmed clear-all control (CI pending) |
+| Optional Contacts screen-capture protection | Implemented in source; CI pending | User-confirmed toggle, off by default; applies Android FLAG_SECURE to app window; notes dialog always protected |
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
@@ -221,3 +222,16 @@ tests cover oversized identity, phones, emails, organization and group names;
 phone/email/group limits and an exact-limit positive case. Limits protect
 reliability but may reject exotic OEM address books; pagination and streaming
 are still needed for production-scale coverage.
+
+**Optional GoreeShield screen protection (this PR):** Tools includes a
+user-confirmed toggle for Android `FLAG_SECURE` on the Contacts Activity.
+It is **off by default** to preserve screenshots and accessibility/screen
+sharing workflows unless the user enables it. When enabled, Android normally
+blocks screenshots, app previews and most screen recording of the window;
+there is no promise against external cameras or all capture hardware.
+Disabling protection after confirmation removes the flag for normal screens.
+A separately protected private-note dialog retains its own `FLAG_SECURE`
+regardless of the app-wide choice. The only persisted value is an app-private
+boolean excluded from Android backup. Synthetic instrumentation tests verify
+default-off, enable, disable and clear without personal contacts. Real OEM
+screen capture, TalkBack and casting compatibility remain release gates.

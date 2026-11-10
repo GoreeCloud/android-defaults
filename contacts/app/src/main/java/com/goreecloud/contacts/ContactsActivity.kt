@@ -57,6 +57,9 @@ class ContactsActivity : Activity() {
     private val worker = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
         ArrayBlockingQueue<Runnable>(2), ThreadPoolExecutor.AbortPolicy())
     private val favorites by lazy { LocalFavorites(getSharedPreferences("favorites_local", MODE_PRIVATE)) }
+    private val screenProtection by lazy {
+        ScreenProtectionPreference(getSharedPreferences("screen_privacy_local", MODE_PRIVATE))
+    }
     private val permissionCode = 41
     private val exportCode = 42
     private val importCode = 43
@@ -64,6 +67,7 @@ class ContactsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyScreenProtection()
         tab = savedInstanceState?.getString("tab")?.takeIf {
             it in listOf("people", "favorites", "groups", "tools", "detail")
         } ?: "people"
@@ -97,6 +101,7 @@ class ContactsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        applyScreenProtection()
         if (::root.isInitialized) {
             if (hasAccess()) refresh() else {
                 invalidate()
@@ -133,6 +138,33 @@ class ContactsActivity : Activity() {
         invalidate()
         worker.shutdownNow()
         super.onDestroy()
+    }
+
+    /** Optional Android window policy; private-note dialogs stay protected independently. */
+    private fun applyScreenProtection() {
+        val flag = android.view.WindowManager.LayoutParams.FLAG_SECURE
+        if (screenProtection.isEnabled()) window.addFlags(flag)
+        else window.clearFlags(flag)
+    }
+
+    private fun confirmChangeScreenProtection() {
+        val enable = !screenProtection.isEnabled()
+        AlertDialog.Builder(this)
+            .setTitle(if (enable) "Protect Contacts screen?" else "Allow screen captures?")
+            .setMessage(if (enable)
+                "Android will block most screenshots, screen recording and app previews " +
+                    "of GoreeCloud Contacts. This may also limit screen sharing. " +
+                    "It cannot stop external cameras."
+                else "Screenshots, screen recording and app previews of normal " +
+                    "GoreeCloud Contacts screens may be allowed again. " +
+                    "Private note reveal dialogs stay protected independently.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton(if (enable) "Enable protection" else "Disable protection") { _, _ ->
+                screenProtection.setEnabled(enable)
+                applyScreenProtection()
+                drawBody()
+            }
+            .show()
     }
 
     private fun hasAccess() = checkSelfPermission(Manifest.permission.READ_CONTACTS) ==
@@ -672,6 +704,14 @@ class ContactsActivity : Activity() {
         privacy.addView(label(favoriteKeys().size.toString() + " app-local favorite markers",
             13f, R.color.muted).apply { setPadding(0, px(10), 0, px(10)) })
         privacy.addView(action("Clear app-local favorites") { confirmClearLocalFavorites() })
+        privacy.addView(label(
+            if (screenProtection.isEnabled()) "Screen capture protection is ON"
+            else "Screen capture protection is OFF",
+            13f, R.color.muted).apply { setPadding(0, px(12), 0, px(8)) })
+        privacy.addView(action(
+            if (screenProtection.isEnabled()) "Disable screen protection"
+            else "Enable screen protection"
+        ) { confirmChangeScreenProtection() })
         container.addView(privacy)
         scroll.addView(container)
         body.addView(scroll, LinearLayout.LayoutParams(
