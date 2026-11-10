@@ -99,7 +99,11 @@ RFC-complete fidelity or safe import of external attachments/photos.
 **Limited CSV export:** User-selected `text/csv` destination and explicit
 confirmation. Values are quoted for CSV, leading formula-like payloads are
 prefixed with a literal apostrophe, and all rows are preflighted against
-field, count and byte limits before the document is opened. Multiple
+field, count and byte limits before the document is opened. CSV
+preflight also rejects lone/misordered UTF-16 surrogate code units from
+provider data rather than silently replacing approved characters during UTF-8
+encoding; valid paired supplementary Unicode is preserved. This applies to
+all four exported columns including joined phone/email values. Multiple
 phone/email values are joined in one column, so this is deliberately not a
 round-trip backup. External document providers can still leave a partial
 file if writing fails after opening; no atomicity or encryption is claimed.
