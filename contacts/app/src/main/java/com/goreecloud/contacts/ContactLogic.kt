@@ -64,16 +64,52 @@ object ContactLogic {
             .sortedBy { it.first().name.lowercase(Locale.ROOT) }
     }
 
-    private fun escapeVCard(text: String): String = text
+    // These limits apply before writing to a user-selected document provider.
+    // An oversized record is rejected in full rather than silently truncated.
+    const val MAX_EXPORT_CONTACTS = 10000
+    const val MAX_EXPORT_BYTES = 10 * 1024 * 1024
+    private const val MAX_CARD_BYTES = 128 * 1024
+    private const val MAX_FIELD_CHARS = 4096
+    private const val MAX_FIELDS_PER_KIND = 100
+
+    /**
+     * Two-pass, memory-bounded validation: inspect every card before opening
+     * the destination, then stream the exact same immutable contact snapshot.
+     * Returns its expected UTF-8 size. No address book data is logged or sent.
+     */
+    fun validateExport(contacts: List<ContactEntry>): Int {
+        require(contacts.isNotEmpty() && contacts.size <= MAX_EXPORT_CONTACTS) {
+            "Export item limit exceeded"
+        }
+        var total = 0L
+        for (contact in contacts) {
+            val bytes = vCard(contact).toByteArray(Charsets.UTF_8).size
+            require(bytes <= MAX_CARD_BYTES) { "A contact exceeds the vCard size limit" }
+            total += bytes
+            require(total <= MAX_EXPORT_BYTES) { "vCard export size limit exceeded" }
+        }
+        return total.toInt()
+    }
+
+    private fun escapeVCard(text: String): String {
+        require(text.length <= MAX_FIELD_CHARS) { "Contact field size limit exceeded" }
+        require(text.none { Character.isISOControl(it) && it != '\r' && it != '\n' }) {
+            "Contact field has an invalid control character"
+        }
+        return text
         .replace("\\", "\\\\")
         .replace("\r\n", "\n")
         .replace("\r", "\n")
         .replace("\n", "\\n")
         .replace(";", "\\;")
         .replace(",", "\\,")
+    }
 
     /** Export deliberately includes only fields represented by this MVP snapshot. */
     fun vCard(contact: ContactEntry): String = buildString {
+        require(contact.phones.size <= MAX_FIELDS_PER_KIND && contact.emails.size <= MAX_FIELDS_PER_KIND) {
+            "Contact has too many phone or email fields"
+        }
         append("BEGIN:VCARD\r\nVERSION:3.0\r\n")
         append("FN:").append(escapeVCard(contact.name)).append("\r\n")
         contact.phones.forEach { append("TEL:").append(escapeVCard(it)).append("\r\n") }
@@ -82,5 +118,6 @@ object ContactLogic {
             append("ORG:").append(escapeVCard(contact.organization)).append("\r\n")
         }
         append("END:VCARD\r\n")
+        require(length <= MAX_CARD_BYTES) { "Contact export exceeds the size budget" }
     }
 }

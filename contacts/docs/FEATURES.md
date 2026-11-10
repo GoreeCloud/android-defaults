@@ -11,7 +11,7 @@
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
 | Contact sharing | Implemented in source | Text preview and user-selected recipient |
-| Partial vCard export | Implemented in source | Names, phones, emails, organization via document picker |
+| Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
 | Duplicate review | Implemented in source | Suggestions only; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
 | Rich data fields, photos, posters, birthdays | Planned | Android provider/UI support and privacy review |
@@ -36,5 +36,14 @@ field joins/deduplication, malformed records, cancellation and row caps.
 Those tests never access real contacts, modify system accounts or claim OEM
 provider-fault / load-testing acceptance. The actual query can still block in
 OEM/provider code; cancellation is cooperative, not guaranteed.
+
+**Export safety:** The selected destination is opened only after a full
+read-only in-memory preflight of every vCard. Limits are 10,000 contacts,
+10 MiB total, 128 KiB per card, 4,096 characters per field and 100 fields
+per phone/email kind. Oversized/invalid inputs fail without deliberate
+truncation. This preview does not guarantee atomic writes when an external
+document provider or storage fails **after** it opens the file; inspect and
+delete any partial destination manually. It does not preserve fields absent
+from the limited vCard representation. Signing and restore fidelity remain open.
 
 **Quality gates:** No network/write/SMS/call permissions; explicit sharing and export; pure JVM tests; packaged APK/lint; disposable emulator smoke. Real OEM provider, physical device, accessibility, visual acceptance, release and sync remain unverified.

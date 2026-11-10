@@ -661,6 +661,10 @@ class ContactsActivity : Activity() {
             Toast.makeText(this, "No contacts to export", Toast.LENGTH_SHORT).show()
             return
         }
+        if (contacts.size > ContactLogic.MAX_EXPORT_CONTACTS) {
+            Toast.makeText(this, "Too many contacts for this preview export", Toast.LENGTH_LONG).show()
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle("Export " + contacts.size + " contacts?")
             .setMessage("A copy containing names, phones, emails and organizations " +
@@ -697,6 +701,10 @@ class ContactsActivity : Activity() {
         try {
             worker.execute {
                 val success = try {
+                    // Refuse malformed or over-budget contact data before
+                    // creating/opening a document. Never start a partial export
+                    // just because a later contact is too large.
+                    ContactLogic.validateExport(requested)
                     val stream = contentResolver.openOutputStream(destination, "wt")
                         ?: throw IllegalStateException("Document cannot be opened")
                     OutputStreamWriter(stream, Charsets.UTF_8).use { writer ->
@@ -706,7 +714,7 @@ class ContactsActivity : Activity() {
                 } catch (_: Exception) { false }
                 runOnUiThread {
                     if (!destroyed) Toast.makeText(this,
-                        if (success) "vCard exported" else "Export failed; check the destination",
+                        if (success) "vCard exported" else "Export refused or interrupted; check the chosen document",
                         Toast.LENGTH_LONG).show()
                 }
             }

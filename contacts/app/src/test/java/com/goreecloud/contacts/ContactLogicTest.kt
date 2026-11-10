@@ -3,6 +3,7 @@ package com.goreecloud.contacts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class ContactLogicTest {
@@ -48,4 +49,62 @@ class ContactLogicTest {
         val copy = ContactEntry(9L, "y", "Name", emails = listOf("alex@example.com"))
         assertEquals(1, ContactLogic.duplicateClusters(listOf(alex, copy)).size)
     }
+    @Test fun validUnicodeExportIsBoundedBeforeWrite() {
+        val content = listOf(ContactEntry(11L, "synthetic", "Renée ☀",
+            listOf("+1 555 0100"), listOf("test@example.invalid")))
+        val bytes = ContactLogic.validateExport(content)
+        assertEquals(ContactLogic.vCard(content[0]).toByteArray(Charsets.UTF_8).size, bytes)
+        assertTrue(bytes > 0)
+    }
+
+    @Test fun vCardRejectsEmbeddedControlCharacters() {
+        val contact = ContactEntry(2L, "key", "No\u0000Name")
+        try {
+            ContactLogic.vCard(contact)
+            fail("Expected NUL rejection")
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    @Test fun vCardRejectsOversizedFieldBeforeAllocatingExport() {
+        val contact = ContactEntry(3L, "key", "x".repeat(4097))
+        try {
+            ContactLogic.validateExport(listOf(contact))
+            fail("Expected field size rejection")
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    @Test fun vCardRejectsExcessiveRepeatedPhoneFields() {
+        val contact = ContactEntry(4L, "key", "Synthetic",
+            phones = List(101) { "555000$it" })
+        try {
+            ContactLogic.vCard(contact)
+            fail("Expected field count rejection")
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    @Test fun exportRejectsOverlongAggregateBeforeOpeningDocument() {
+        val contact = ContactEntry(5L, "key", "Synthetic",
+            phones = List(70) { "9".repeat(3000) })
+        try {
+            ContactLogic.validateExport(listOf(contact))
+            fail("Expected per-card bytes rejection")
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    @Test fun exportRejectsTooManyContactsAndEmptySelections() {
+        for (contacts in listOf(emptyList(), List(10001) {
+            ContactEntry(it.toLong(), "k$it", "Synthetic")
+        })) {
+            try {
+                ContactLogic.validateExport(contacts)
+                fail("Expected invalid export count")
+            } catch (_: IllegalArgumentException) {
+            }
+        }
+    }
+
 }
