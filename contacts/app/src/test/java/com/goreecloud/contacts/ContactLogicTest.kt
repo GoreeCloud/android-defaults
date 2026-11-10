@@ -135,4 +135,28 @@ class ContactLogicTest {
         assertFalse(card.contains("Memphis"))
     }
 
+    @Test fun longUnicodeVCardFieldsFoldAtUtf8OctetBoundaryAndRoundTrip() {
+        val name = "Renée✨".repeat(15)
+        val organization = "公司🙂".repeat(20)
+        val contact = ContactEntry(45L, "key", name,
+            emails = listOf("person@example.invalid"), organization = organization)
+        val card = ContactLogic.vCard(contact)
+        assertTrue(card.contains("\r\n "))
+        val physicalLines = card.split("\r\n").filter { it.isNotEmpty() }
+        assertTrue(physicalLines.all { it.toByteArray(Charsets.UTF_8).size <= 75 })
+        val parsed = VCardImport.parse(card.toByteArray(Charsets.UTF_8))
+        assertEquals(name, parsed.name)
+        assertEquals(organization, parsed.organization)
+        assertEquals(ContactLogic.validateExport(listOf(contact)),
+            card.toByteArray(Charsets.UTF_8).size)
+    }
+
+    @Test fun vCardRejectsUnpairedSurrogateInsteadOfReplacingContactText() {
+        try {
+            ContactLogic.vCard(ContactEntry(67L, "bad", "Invalid\uD800"))
+            fail("Expected malformed Unicode rejection")
+        } catch (_: IllegalArgumentException) {}
+    }
+
+
 }

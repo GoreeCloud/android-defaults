@@ -124,3 +124,13 @@ Controls live only in the Activity saved state (no server, new permission or
 background transfer). Pure JVM tests cover Unicode names, multiple field
 terms, digit search, ordering and subset isolation. OEM accessibility and
 large-directory performance acceptance remain open.
+
+**UTF-8-safe vCard physical line folding (CI under review):** All generated vCard
+3.0 properties are folded to at most 75 **UTF-8 octets per physical line**,
+including the RFC continuation whitespace. Multi-byte Unicode code points
+are kept intact, malformed lone surrogates fail validation, and the existing
+byte/field/contact export budgets remain mandatory before opening the
+selected destination. Pure JVM regression tests cover accented names,
+emoji/other multibyte characters, and round-trip through the application's
+limited vCard importer. This improves interoperability but does not provide
+full field or multi-contact import fidelity.
