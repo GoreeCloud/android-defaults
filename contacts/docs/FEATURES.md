@@ -11,6 +11,7 @@
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
+| Opt-in address-to-maps handoff | Implemented in source; CI pending | Preview exact address, confirm and choose recipient mapping application; no device location access |
 | Contact sharing | Implemented in source | Affirmative field selection (none preselected), exact preview, then recipient app chooser; no notes/addresses |
 | Single-contact vCard/CSV export from profile | Implemented in source; CI pending | Uses existing size/field validation, confirmation and user-chosen SAF destination |
 | Partial vCard export | Implemented in source; export preflight CI pending | Names, phones, emails and organizations via document picker; checks byte/field/contact budgets and control characters before opening destination |
@@ -158,3 +159,17 @@ existing explicit document-location picker, count/size preflight and limited
 field formats. No background transfer, new permission, provider write or
 implicit remote destination is introduced. Real receiver-app tests and
 accessibility remain independent acceptance gates.
+
+**Optional map handoff (this PR):** When an Android contact contains a
+formatted postal address, its profile offers `Open address in maps`. The
+user sees that address in a consent dialog before Android opens the receiving
+app chooser. A pure Kotlin builder percent-encodes the address into a `geo:`
+query, refuses invalid/oversized fields and prevents URL query injection.
+GoreeCloud Contacts uses no GPS/location or Internet permission and makes no
+network request. The chosen mapping application may use the Internet and
+receives the address **only after the user's explicit action**. No background
+geocoding, telemetry or stored coordinates are introduced. External app
+availability and physical-device handoff acceptance remain unverified.
+The initial isolated implementation passed JVM tests, APK build, Lint and
+Android 26/35/36 emulator CI. Verification of the branch after rebasing onto
+the merged selective-sharing change is tracked independently in this PR.

@@ -726,8 +726,12 @@ class ContactsActivity : Activity() {
             c.addresses.forEach { address ->
                 extended.addView(label("Address", 12f, R.color.muted, true))
                 extended.addView(label(address, 15f, R.color.ink).apply {
-                    setPadding(0, px(3), 0, px(14))
+                    setPadding(0, px(3), 0, px(8))
                 })
+                extended.addView(action("Open address in maps") {
+                    confirmMapAddress(address)
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(14) })
             }
             c.importantDates.forEach { date ->
                 extended.addView(label(date.label, 12f, R.color.muted, true))
@@ -787,6 +791,27 @@ class ContactsActivity : Activity() {
         launch(Intent(Intent.ACTION_INSERT).apply {
             type = ContactsContract.Contacts.CONTENT_TYPE
         })
+    }
+
+    /** GoreeShield consent before passing a private postal address to a third-party app. */
+    private fun confirmMapAddress(address: String) {
+        val geo = try {
+            AddressNavigation.geoUri(address)
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(this, "Address cannot be opened", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Open this address in a map?")
+            .setMessage("The maps app you select will receive this postal address:\n\n" +
+                address + "\n\nThe receiving app may use the Internet. " +
+                "GoreeCloud Contacts does not send your device location.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Choose maps app") { _, _ ->
+                launch(Intent.createChooser(Intent(Intent.ACTION_VIEW, Uri.parse(geo)),
+                    "Open address with"))
+            }
+            .show()
     }
 
     private fun confirmShare(c: ContactEntry) {
