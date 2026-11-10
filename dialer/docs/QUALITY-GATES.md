@@ -77,6 +77,11 @@ to public issues, CI logs or screenshot artifacts.
   keyboard. The callback is cleared on each Activity render/destruction.
   A synthetic ContactsProvider timing fixture is still required to establish
   provider-completion-with-focus acceptance.
+  Dialer snapshot cursors now use a shared fail-closed reader with a bounded
+  record count and a scan budget of ten times that count for malformed/blank
+  entries. Synthetic Android MatrixCursor instrumentation covers empty, null,
+  partial/malformed, canceled and oversized scans; it does not substitute
+  for real Contacts/Call Log service fault injection or slow-OEM timing.
   A null provider cursor is treated as a retryable read failure rather than
   an empty contact list or empty call history. On provider exceptions during
   cursor traversal, partial results are discarded before the error is shown.
