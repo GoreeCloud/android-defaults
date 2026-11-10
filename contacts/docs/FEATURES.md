@@ -233,6 +233,16 @@ explicitly capped. Pure JVM tests verify candidate identity, ordering,
 privacy omissions and limits. No Contacts Provider mutation, deletion,
 merging, telemetry, new permission or network operation is introduced.
 
+**Bounded upcoming-date selection (this PR):** The next-90-days overview
+now keeps at most the requested 1–50 candidates in a worst-first heap rather
+than materializing and sorting every matching event. It returns the same
+ascending date/name/contact-ID ordering while reducing selection memory to
+O(maxResults), independent of total contact count. Pure JVM regressions
+cover a synthetic 5,000-contact directory, top-one selection and date order.
+Provider reads, date inference, permissions, reminders and UI behavior are
+unchanged; OEM performance benchmarks and real populated-device reviews
+remain required.
+
 **Optional GoreeShield window protection (draft integration):** The Tools view
 allows users to opt in to Android `FLAG_SECURE` with an explicit confirmation.
 The setting defaults OFF to preserve ordinary screenshots, screen sharing and
