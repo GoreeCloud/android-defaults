@@ -89,6 +89,9 @@ jobs:
       - name: Verify screenshot script syntax and invalid API refusal
         run: |
           bash -n contacts/ci/capture-emulator.sh
+          bash -n contacts/ci/fresh-hierarchy.sh
+          bash -n contacts/ci/test-fresh-hierarchy.sh
+          bash contacts/ci/test-fresh-hierarchy.sh
           bash -n ci/emulator-only.sh
           bash -n ci/test-emulator-only.sh
           bash ci/test-emulator-only.sh
