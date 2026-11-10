@@ -82,6 +82,11 @@ to public issues, CI logs or screenshot artifacts.
   entries. Synthetic Android MatrixCursor instrumentation covers empty, null,
   partial/malformed, canceled and oversized scans; it does not substitute
   for real Contacts/Call Log service fault injection or slow-OEM timing.
+  Cancellation is rechecked **after Cursor.close()** as well as during
+  traversal: a provider that cancels during cursor cleanup must not return
+  an apparently valid Contacts/Call Log snapshot, even at the visible
+  record cap. The synthetic CursorWrapper regression has no real device
+  data; actual OEM provider responsiveness and cancellation remain open.
   A null provider cursor is treated as a retryable read failure rather than
   an empty contact list or empty call history. On provider exceptions during
   cursor traversal, partial results are discarded before the error is shown.
