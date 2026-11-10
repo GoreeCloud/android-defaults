@@ -58,6 +58,13 @@ class MergeAdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "permissions"):
             verify(self.workflows)
 
+    def test_rejects_unreviewed_yaml_extension_workflow(self):
+        (self.workflows / "invisible.yaml").write_text(
+            "name: Invisible\non: push\n", encoding="utf-8"
+        )
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing"):
+            verify(self.workflows)
+
     def test_rejects_unreviewed_additional_workflow(self):
         (self.workflows / "invisible.yml").write_text(
             "name: Invisible\non: push\n", encoding="utf-8"
