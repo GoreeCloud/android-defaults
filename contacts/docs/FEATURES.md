@@ -2,6 +2,8 @@
 
 **Scope: Android only.** Source implementation is not evidence of release, device acceptance or all-platform support.
 
+**vCard export preview integrity (November 10, 2026):** Before the user-selected document is opened, name, phone, email and organization values now fail closed on Unicode bidi directional overrides/isolates, rendering marks and U+2028/U+2029 line separators that can spoof a displayed record or fail the strict one-card importer. The original UTF-8 folding, ordinary international writing, field limits and consent gate remain. Pure JVM tests validate synthetic rejection and multilingual acceptance; no live provider data, real-device acceptance, CardDAV write or production release is implied.
+
 **Private-note search privacy (November 10, 2026):** The original local directory matchers included hidden note text, even when the notes were masked in profile cards. This could disclose whether a contact carried a searched keyword without an explicit reveal. The development fix excludes note contents from default directory filtering and the legacy contact matcher; visible names, phones, emails, organizations, addresses and date labels remain searchable. Notes are still available only through the existing affirmative, secure reveal dialog. Pure JVM regressions cover both matchers. This is not encryption, provider-level access control or a physical-device privacy certification.
 
 | Feature | Status | Notes |
