@@ -1,5 +1,7 @@
 # GoreeCloud Contacts — Android
 
+> **Legacy source location (November 11, 2026).** Current GoreeCloud Contacts development is in the standalone [GoreeCloud/contacts](https://github.com/GoreeCloud/contacts) repository, migrated in [Contacts PR #1](https://github.com/GoreeCloud/contacts/pull/1). This monorepo module remains a compatibility/rollback snapshot while its CI and Clock/Dialer consumers are reconciled. It is **not** the new development authority; no Android user data was moved.
+
 A separate native Kotlin Android application in the GoreeCloud Android Defaults monorepo.
 
 **Maturity: 0.1.0 development preview, not a certified replacement for the device's contacts application.** Android-only, independent from the Dialer. Minimum API 26; compile and target SDK 35.
