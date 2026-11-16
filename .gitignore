@@ -6,3 +6,9 @@
 *.apk
 *.aab
 .DS_Store
+# Keep local Android signing secrets and generated captures untracked.
+*.jks
+*.keystore
+**/.cxx/
+**/.externalNativeBuild/
+**/captures/

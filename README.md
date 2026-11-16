@@ -14,4 +14,8 @@ The [Dialer source](dialer/) is a Kotlin Android application intended to request
 
 The [previous monorepo Contacts module](contacts/) and [its original documentation](contacts/README.md) are kept temporarily for legacy CI/other module compatibility, source provenance and rollback, **not as the owner of new Contacts development**. Do not remove it until active consumers and native acceptance are verified. The Dialer and Contacts remain independently packaged products; no installed personal contacts or device roles were migrated by the repository change.
 
-Other products, including Clock, may be developed in separate pull requests; their existence in a PR does not mean they are on this branch.
+## GoreeCloud Clock — draft integration candidate
+
+This development branch stages the [native Kotlin/Jetpack Compose Clock module](clock/) beside the existing Dialer and preserved Contacts compatibility module. Clock offers local Alarms, Timer, Stopwatch and Settings; it requires Android notification and exact-alarm permissions for alerting. See the [Clock limitations and privacy notes](docs/clock.md).
+
+Clock remains **draft, unmerged and not a verified system-alarm replacement**. Physical-device reliability, accessible interface review, release signing, backup behavior and [source-license reconciliation](https://github.com/GoreeCloud/android-defaults/issues/46) are outstanding. Combined automated CI and emulator checks do not constitute those release approvals.

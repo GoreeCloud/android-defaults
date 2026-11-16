@@ -71,7 +71,16 @@ ensure_rendered_keypad() {
     fi
     sleep 2
   done
-  # Keep synthetic visual failure evidence without silently counting it as
+  # Fail-closed diagnostics: save the final accessibility tree and focused
+  # window alongside the failure screenshot for the *verified disposable emulator*.
+  # Do not print UI content into public CI logs or count these as accepted images.
+  # The guard above rejects physical devices before this function can run.
+  if [[ -n "$xml" ]]; then
+    printf '%s\n' "$xml" > "$screens/capture-failure-android-$api.xml"
+  fi
+  adb_target shell dumpsys window 2>/dev/null |
+    grep -E 'mCurrentFocus|mFocusedApp' > "$screens/capture-failure-focus-android-$api.txt" || true
+  # Retain synthetic visual failure evidence without silently counting it as
   # an acceptance screenshot. No real contacts or call history in CI images.
   adb_target exec-out screencap -p > "$screens/capture-failure-android-$api.png" || true
   printf 'Dialer keypad and primary Call action never both appeared in Android accessibility tree.\n' >&2

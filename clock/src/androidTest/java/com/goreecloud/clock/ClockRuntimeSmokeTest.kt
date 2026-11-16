@@ -1,0 +1,245 @@
+package com.goreecloud.clock
+
+import android.Manifest
+import android.app.PendingIntent
+import android.content.ComponentName
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.goreecloud.clock.alarms.AlarmEngine
+import com.goreecloud.clock.alarms.AlarmReceiver
+import com.goreecloud.clock.alarms.ClockMath
+import com.goreecloud.clock.alarms.RescheduleReceiver
+import com.goreecloud.clock.data.ClockAlarm
+import com.goreecloud.clock.data.ClockStore
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/** Disposable-emulator smoke coverage; not physical alarm/audibility acceptance. */
+@RunWith(AndroidJUnit4::class)
+class ClockRuntimeSmokeTest {
+    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    @Test fun floatingNavigationOpensAllFourPages() {
+        compose.onNode(hasText("Alarms") and hasClickAction()).assertExists()
+        compose.onNodeWithText("NEXT ALARM").assertExists()
+        compose.onNode(hasText("Timer") and hasClickAction()).performClick()
+        compose.onNodeWithText("Duration").assertExists()
+        compose.onNode(hasText("Stopwatch") and hasClickAction()).performClick()
+        compose.onNodeWithText("No laps yet").assertExists()
+        compose.onNode(hasText("Settings") and hasClickAction()).performClick()
+        compose.onNodeWithText("Appearance").assertExists()
+    }
+
+    @Test fun settingsAboutPrivacyNoteRemainsReachableByScrolling() {
+        compose.onNode(hasText("Settings") and hasClickAction()).performClick()
+        // About can start below the floating dock on phone layouts.
+        // Verify scroll semantics can bring the privacy explanation onscreen.
+        compose.onNodeWithText("Private by design. Stored locally on this device.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test fun distinct64BitAlarmIdsNeverAliasInAndroidPendingIntentIdentity() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val aId = 1L
+        val bId = 1L shl 32
+        assertEquals(aId.hashCode(), bId.hashCode())
+        fun request(id: Long): PendingIntent = PendingIntent.getBroadcast(
+            context, 0,
+            Intent(context, AlarmReceiver::class.java)
+                .setAction("com.goreecloud.clock.ALARM")
+                .setData(Uri.parse(ClockMath.alarmRequestData(id)))
+                .putExtra("alarm_id", id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val first = request(aId)
+        val second = request(bId)
+        try {
+            assertNotEquals(first, second)
+        } finally {
+            first.cancel()
+            second.cancel()
+        }
+    }
+
+    @Test fun timerDeadlineAndPauseStateAreDurablyCommittedBeforeReceiverUsesThem() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val oldDeadline = ClockStore.timerDeadline(context)
+        val oldRemaining = ClockStore.timerRemaining(context)
+        try {
+            val due = System.currentTimeMillis() + 90_000L
+            // No system alarm is armed: this tests the local state write boundary.
+            assertTrue(ClockStore.setTimer(context, due, 0L))
+            val freshPrefs = context.getSharedPreferences("clock_preferences", android.content.Context.MODE_PRIVATE)
+            assertEquals(due, freshPrefs.getLong("timer_deadline", 0L))
+            assertEquals(0L, ClockStore.timerRemaining(context))
+            assertTrue(ClockStore.setTimer(context, 0L, 37_000L))
+            assertEquals(0L, freshPrefs.getLong("timer_deadline", -1L))
+            assertEquals(37_000L, freshPrefs.getLong("timer_remaining", -1L))
+        } finally {
+            assertTrue(ClockStore.setTimer(context, oldDeadline, oldRemaining))
+        }
+    }
+
+    @Test fun overdueTimerSurvivesBootForForegroundRecoveryNotice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val oldDeadline = ClockStore.timerDeadline(context)
+        val oldRemaining = ClockStore.timerRemaining(context)
+        try {
+            val expired = System.currentTimeMillis() - 60_000L
+            ClockStore.setTimer(context, expired, 0L)
+            // Simulate the receiver using only synthetic app-local timer state.
+            // A real device boot and audible alert still require physical QA.
+            RescheduleReceiver().onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+            assertEquals(expired, ClockStore.timerDeadline(context))
+        } finally {
+            ClockStore.setTimer(context, oldDeadline, oldRemaining)
+        }
+    }
+
+    @Test fun deniedTimerNotificationRetainsDueTimerUntilAcknowledged() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val previousDeadline = ClockStore.timerDeadline(context)
+        val previousRemaining = ClockStore.timerRemaining(context)
+        val receiver = AlarmReceiver()
+        try {
+            val expired = System.currentTimeMillis() - 60_000L
+            ClockStore.setTimer(context, expired, 0L)
+            var attempts = 0
+            receiver.completeTimerWithAlert(context, expired - 2_000L) {
+                attempts++
+                true
+            }
+            assertEquals(0, attempts)
+            assertEquals(expired, ClockStore.timerDeadline(context))
+
+            receiver.completeTimerWithAlert(context, System.currentTimeMillis()) {
+                attempts++
+                false // Simulated Android permission/channel denial.
+            }
+            assertEquals(1, attempts)
+            assertEquals(expired, ClockStore.timerDeadline(context))
+
+            receiver.completeTimerWithAlert(context, System.currentTimeMillis()) {
+                attempts++
+                true // Simulated accepted notification post.
+            }
+            assertEquals(2, attempts)
+            assertEquals(0L, ClockStore.timerDeadline(context))
+        } finally {
+            ClockStore.setTimer(context, previousDeadline, previousRemaining)
+        }
+    }
+
+    @Test fun deniedOneShotAlarmPersistsWarningUntilAcknowledged() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existing = ClockStore.alarms(context)
+        val id = ClockMath.uniqueAlarmId(System.currentTimeMillis(), existing.map { it.id })
+        val oldWarning = ClockStore.hasUndeliveredAlarm(context)
+        val alarm = ClockAlarm(id, 6, 30, repeatDays = 0, enabled = true)
+        val receiver = AlarmReceiver()
+        try {
+            ClockStore.acknowledgeUndeliveredAlarm(context)
+            ClockStore.upsertAlarm(context, alarm)
+            var attempts = 0
+            receiver.completeAlarmWithAlert(context, id) {
+                attempts++
+                false // Synthetic Android refusal, no permission changes.
+            }
+            assertEquals(1, attempts)
+            assertFalse(ClockStore.alarms(context).first { it.id == id }.enabled)
+            assertTrue(ClockStore.hasUndeliveredAlarm(context))
+
+            ClockStore.acknowledgeUndeliveredAlarm(context)
+            assertFalse(ClockStore.hasUndeliveredAlarm(context))
+
+            ClockStore.upsertAlarm(context, alarm)
+            receiver.completeAlarmWithAlert(context, id) {
+                attempts++
+                true // API accepted, not an audibility guarantee.
+            }
+            assertEquals(2, attempts)
+            assertFalse(ClockStore.hasUndeliveredAlarm(context))
+        } finally {
+            ClockStore.removeAlarm(context, id)
+            if (oldWarning) ClockStore.recordUndeliveredAlarm(context)
+            else ClockStore.acknowledgeUndeliveredAlarm(context)
+        }
+    }
+
+    @Test fun overdueOneShotOnSyntheticBootIsDisabledWithLocalWarning() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existing = ClockStore.alarms(context)
+        val id = ClockMath.uniqueAlarmId(System.currentTimeMillis(), existing.map { it.id })
+        val oldWarning = ClockStore.hasMissedOneShot(context)
+        val oldStopwatchStart = ClockStore.stopwatchStart(context)
+        val oldStopwatchAccumulated = ClockStore.stopwatchAccumulated(context)
+        try {
+            ClockStore.acknowledgeMissedOneShot(context)
+            ClockStore.upsertAlarm(context, ClockAlarm(id, 6, 30, enabled = true))
+            val due = System.currentTimeMillis() - 120_000L
+            assertTrue(ClockStore.recordOneShotDue(context, id, due))
+
+            // A synthetic action on a disposable emulator, not a device reboot.
+            RescheduleReceiver().onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+            assertFalse(ClockStore.alarms(context).first { it.id == id }.enabled)
+            assertEquals(0L, ClockStore.oneShotDue(context, id))
+            assertTrue(ClockStore.hasMissedOneShot(context))
+
+            ClockStore.acknowledgeMissedOneShot(context)
+            assertFalse(ClockStore.hasMissedOneShot(context))
+        } finally {
+            ClockStore.removeAlarm(context, id)
+            ClockStore.setStopwatch(context, oldStopwatchAccumulated, oldStopwatchStart)
+            if (oldWarning) ClockStore.recordMissedOneShot(context)
+            else ClockStore.acknowledgeMissedOneShot(context)
+        }
+    }
+
+    @Test fun legacyOneShotWithoutStoredDueIsNotDeclaredMissed() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existing = ClockStore.alarms(context)
+        val id = ClockMath.uniqueAlarmId(System.currentTimeMillis(), existing.map { it.id })
+        val oldWarning = ClockStore.hasMissedOneShot(context)
+        try {
+            ClockStore.acknowledgeMissedOneShot(context)
+            ClockStore.upsertAlarm(context, ClockAlarm(id, 6, 30, enabled = true))
+            assertEquals(0L, ClockStore.oneShotDue(context, id))
+            AlarmEngine.reconcileMissedOneShots(context, System.currentTimeMillis())
+            assertTrue(ClockStore.alarms(context).first { it.id == id }.enabled)
+            assertFalse(ClockStore.hasMissedOneShot(context))
+        } finally {
+            ClockStore.removeAlarm(context, id)
+            if (oldWarning) ClockStore.recordMissedOneShot(context)
+            else ClockStore.acknowledgeMissedOneShot(context)
+        }
+    }
+
+    @Test fun installedAppHasNoInternetOrExportedReceivers() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val pm = context.packageManager
+        assertEquals(PackageManager.PERMISSION_DENIED,
+            pm.checkPermission(Manifest.permission.INTERNET, context.packageName))
+        val info = pm.getApplicationInfo(context.packageName, 0)
+        assertEquals(0, info.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
+        for (receiver in listOf(AlarmReceiver::class.java, RescheduleReceiver::class.java)) {
+            assertFalse(pm.getReceiverInfo(ComponentName(context, receiver), 0).exported)
+        }
+    }
+}

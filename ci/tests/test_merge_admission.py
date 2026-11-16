@@ -27,13 +27,25 @@ class MergeAdmissionTests(unittest.TestCase):
 
     def test_accepts_explicit_always_on_main_and_source_specific_workflows(self):
         self.assertEqual(verify(self.workflows),
-                         ["admission.yml", "contacts.yml", "dialer.yml"])
+                         ["admission.yml", "android.yml", "contacts.yml", "dialer.yml"])
 
     def test_rejects_broken_or_unapproved_action_pins(self):
         self.change("admission.yml",
                     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                     "actions/checkout@v4")
         with self.assertRaisesRegex(ValueError, "unpinned action"):
+            verify(self.workflows)
+
+    def test_rejects_unpinned_clock_workflow_action(self):
+        self.change("android.yml",
+                    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                    "actions/checkout@v4")
+        with self.assertRaisesRegex(ValueError, "unpinned action"):
+            verify(self.workflows)
+
+    def test_rejects_missing_clock_workflow(self):
+        (self.workflows / "android.yml").unlink()
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing"):
             verify(self.workflows)
 
     def test_rejects_path_filters_on_the_always_on_gate(self):

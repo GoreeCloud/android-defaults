@@ -9,7 +9,8 @@ synthetic device-admission checks.
 `python3 ci/check_merge_admission.py` validates that:
 
 - the Contacts and Dialer workflows remain present with their established
-  source-specific triggers;
+  source-specific triggers, and the **draft Clock integration branch** also requires
+  its reviewed unfiltered `android.yml` Clock workflow (not merged into `main`);
 - the admission workflow has **no path filters**, so a docs-only change still
   receives a predictable hosted check;
 - all workflow actions are exact approved immutable commits and every checkout
@@ -26,7 +27,7 @@ tests run without touching a physical device.
 
 This workflow is **not a protected-branch rule**, a PR approval, an Android
 APK build, a Phone-role safety test or a signature/release authorization.
-The Contacts and Dialer build/emulator workflows still use `paths` filters.
+The Contacts and Dialer build/emulator workflows still use `paths` filters; the draft Clock workflow is unfiltered and subject to the same approved action-pin and read-only token policy.
 **Do not make those filtered statuses mandatory** in GitHub branch rules: an
 unrelated change can leave them skipped or pending. An actual required-status
 policy must incorporate trustworthy path-based evaluation of the appropriate

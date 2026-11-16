@@ -16,7 +16,7 @@ APPROVED = {
     "actions/upload-artifact": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
     "ReactiveCircus/android-emulator-runner": "a421e43855164a8197daf9d8d40fe71c6996bb0d",
 }
-WORKFLOWS = ("contacts.yml", "dialer.yml", "admission.yml")
+WORKFLOWS = ("contacts.yml", "dialer.yml", "admission.yml", "android.yml")
 USE_PATTERN = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
 
 
@@ -55,7 +55,7 @@ def verify(workflows: Path) -> list[str]:
                 raise ValueError(f"{filename}: unreviewed action revision")
         if f"actions/checkout@{APPROVED['actions/checkout']}" not in actions:
             raise ValueError(f"{filename}: reviewed checkout is required")
-        filtered = filename != "admission.yml"
+        filtered = filename not in {"admission.yml", "android.yml"}
         has_paths = bool(re.search(r"(?m)^\s+paths(?:-ignore)?:\s*$", source))
         if has_paths != filtered:
             raise ValueError(f"{filename}: unexpected pull request or push path filters")
