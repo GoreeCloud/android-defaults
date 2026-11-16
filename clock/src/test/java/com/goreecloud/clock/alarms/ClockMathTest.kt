@@ -32,6 +32,12 @@ class ClockMathTest {
         assertEquals(false, ClockMath.oneShotOverdue(due, due + 59_999L))
         assertEquals(true, ClockMath.oneShotOverdue(due, due + 60_000L))
         assertEquals(true, ClockMath.oneShotOverdue(due, due + 120_000L))
+        // A just-due alarm remains pending during grace; never silently roll it.
+        assertEquals(false, ClockMath.shouldRescheduleOneShot(due, due))
+        assertEquals(false, ClockMath.shouldRescheduleOneShot(due, due + 30_000L))
+        assertEquals(false, ClockMath.shouldRescheduleOneShot(due, due + 120_000L))
+        assertEquals(true, ClockMath.shouldRescheduleOneShot(due, due - 1L))
+        assertEquals(true, ClockMath.shouldRescheduleOneShot(0L, due + 120_000L))
     }
 
     @Test fun alarmIdentityDistinguishesCollidingLongHashCodes() {
