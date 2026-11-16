@@ -46,7 +46,11 @@ object ClockStore {
         }.filter { it.id != 0L }.distinctBy { it.id }.sortedWith(compareBy({ it.hour }, { it.minute }))
     }
 
-    private fun writeAlarms(context: Context, alarms: List<ClockAlarm>) {
+    /** A scheduled PendingIntent must never outlive an unwritten alarm record.
+     * Commit synchronously so the UI can refuse to change Android scheduling
+     * when a disk write fails or the process is interrupted.
+     */
+    private fun writeAlarms(context: Context, alarms: List<ClockAlarm>): Boolean {
         val array = JSONArray()
         alarms.forEach { alarm ->
             array.put(JSONObject()
@@ -56,17 +60,18 @@ object ClockStore {
                 .put("repeatDays", alarm.repeatDays)
                 .put("enabled", alarm.enabled))
         }
-        prefs(context).edit().putString(ALARMS, array.toString()).apply()
+        return prefs(context).edit().putString(ALARMS, array.toString()).commit()
     }
 
-    fun upsertAlarm(context: Context, alarm: ClockAlarm) {
+    fun upsertAlarm(context: Context, alarm: ClockAlarm): Boolean {
         val current = alarms(context).filterNot { it.id == alarm.id }
-        writeAlarms(context, current + alarm)
+        return writeAlarms(context, current + alarm)
     }
 
-    fun removeAlarm(context: Context, id: Long) {
+    fun removeAlarm(context: Context, id: Long): Boolean {
+        if (!writeAlarms(context, alarms(context).filterNot { it.id == id })) return false
         clearOneShotDue(context, id)
-        writeAlarms(context, alarms(context).filterNot { it.id == id })
+        return true
     }
 
     fun timerDeadline(context: Context): Long = prefs(context).getLong(TIMER_DEADLINE, 0L)

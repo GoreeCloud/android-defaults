@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.goreecloud.clock.alarms.AlarmEngine
+import com.goreecloud.clock.alarms.AlarmUpdateTransaction
 import com.goreecloud.clock.alarms.ClockMath
 import com.goreecloud.clock.alarms.ClockTimeFormat
 import com.goreecloud.clock.alarms.TimerStartTransaction
@@ -245,12 +246,32 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     }
 
     fun updateAlarm(alarm: ClockAlarm) {
-        AlarmEngine.cancelAlarm(context, alarm.id)
-        val scheduled = !alarm.enabled || AlarmEngine.scheduleAlarm(context, alarm)
-        val saved = if (scheduled) alarm else alarm.copy(enabled = false)
-        ClockStore.upsertAlarm(context, saved)
+        // Durably save the intended state BEFORE arming/cancelling Android.
+        // If runtime permissions are unavailable, retain the alarm as disabled,
+        // as earlier previews did; do not falsely claim it was scheduled.
+        val canEnable = !alarm.enabled || AlarmEngine.ready(context)
+        val stored = if (canEnable) alarm else alarm.copy(enabled = false)
+        val outcome = AlarmUpdateTransaction.update(
+            enabled = stored.enabled,
+            save = { ClockStore.upsertAlarm(context, stored) },
+            schedule = { AlarmEngine.scheduleAlarm(context, stored) },
+            saveDisabled = {
+                ClockStore.upsertAlarm(context, stored.copy(enabled = false))
+            },
+            cancel = { AlarmEngine.cancelAlarm(context, stored.id) },
+        )
         alarms = ClockStore.alarms(context)
-        if (!scheduled) notice = "Enable notifications and exact alarms in Settings before turning on alarms."
+        notice = when (outcome) {
+            AlarmUpdateTransaction.Result.SAVE_FAILED ->
+                "Couldn't save the alarm. The previous scheduled alarm was left unchanged."
+            AlarmUpdateTransaction.Result.SCHEDULE_FAILED ->
+                "Android refused the alarm schedule. The saved alarm was disabled."
+            AlarmUpdateTransaction.Result.DISABLE_SAVE_FAILED ->
+                "Alarm scheduling failed, and its disabled state could not be saved. Don't rely on this alarm."
+            else -> if (alarm.enabled && !canEnable)
+                "Enable notifications and exact alarms in Settings before turning on alarms."
+                else null
+        }
     }
 
     val dark = when (themeMode) {
@@ -392,8 +413,13 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                         onToggle = { alarm, enabled -> updateAlarm(alarm.copy(enabled = enabled)) },
                         onEditDays = { editingRepeat = it },
                         onDelete = {
-                            AlarmEngine.cancelAlarm(context, it.id)
-                            ClockStore.removeAlarm(context, it.id)
+                            // Persist deletion before canceling the pending broadcast:
+                            // failed storage must not silently erase an active alarm.
+                            if (ClockStore.removeAlarm(context, it.id)) {
+                                AlarmEngine.cancelAlarm(context, it.id)
+                            } else {
+                                notice = "Couldn't delete the alarm. Its schedule was preserved."
+                            }
                             alarms = ClockStore.alarms(context)
                         },
                     )
