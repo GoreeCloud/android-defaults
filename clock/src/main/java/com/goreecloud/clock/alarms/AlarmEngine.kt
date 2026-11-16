@@ -93,13 +93,21 @@ object AlarmEngine {
                 alarmIntent(context, alarm.id),
             )
             cancelLegacyAlarm(context, alarm.id)
-            true
+            if (alarm.repeatDays == 0 && !ClockStore.recordOneShotDue(context, alarm.id, at)) {
+                // A one-shot without a durable due instant cannot be recovered safely.
+                context.getSystemService(AlarmManager::class.java).cancel(alarmIntent(context, alarm.id))
+                false
+            } else {
+                if (alarm.repeatDays != 0) ClockStore.clearOneShotDue(context, alarm.id)
+                true
+            }
         } catch (_: SecurityException) { false }
     }
 
     fun cancelAlarm(context: Context, id: Long) {
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent(context, id))
         cancelLegacyAlarm(context, id)
+        ClockStore.clearOneShotDue(context, id)
     }
 
     fun scheduleTimer(context: Context, deadline: Long): Boolean {
@@ -123,10 +131,28 @@ object AlarmEngine {
      * PendingIntent identity makes repeated scheduling idempotent.
      */
     fun reconcileSchedules(context: Context) {
+        // Detect overdue one-shots even when permissions remain revoked.
+        reconcileMissedOneShots(context, System.currentTimeMillis())
         if (!ready(context)) return
         ClockStore.alarms(context).filter { it.enabled }.forEach { scheduleAlarm(context, it) }
         val deadline = ClockStore.timerDeadline(context)
         if (deadline > System.currentTimeMillis()) scheduleTimer(context, deadline)
+    }
+
+    /** Only alarms with a persisted due instant can be classified after migration.
+     * A short grace window avoids declaring a broadcast late while Android is handling it.
+     * A wall-clock jump forward may also trigger a conservative 'possibly missed' warning.
+     */
+    internal fun reconcileMissedOneShots(context: Context, nowMillis: Long) {
+        ClockStore.alarms(context).filter { it.enabled && it.repeatDays == 0 }.forEach { alarm ->
+            val originalDue = ClockStore.oneShotDue(context, alarm.id)
+            if (ClockMath.oneShotOverdue(originalDue, nowMillis) &&
+                ClockStore.recordMissedOneShot(context)
+            ) {
+                cancelAlarm(context, alarm.id)
+                ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
+            }
+        }
     }
 
     fun createNotificationChannel(context: Context) {
@@ -195,6 +221,10 @@ class AlarmReceiver : BroadcastReceiver() {
     ) {
         val alarm = ClockStore.alarms(context).firstOrNull { it.id == id && it.enabled } ?: return
         if (alarm.repeatDays == 0) {
+            // Ignore a stale broadcast from a prior scheduled occurrence.
+            val originalDue = ClockStore.oneShotDue(context, id)
+            if (originalDue > 0L && System.currentTimeMillis() + 1500L < originalDue) return
+            ClockStore.clearOneShotDue(context, id)
             ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
         } else {
             // Keep recurring alarm intent enabled if temporary scheduling fails.
@@ -231,15 +261,10 @@ class RescheduleReceiver : BroadcastReceiver() {
                 ClockStore.setStopwatch(context, ClockStore.stopwatchAccumulated(context), 0L)
             }
         }
-        ClockStore.alarms(context).filter { it.enabled }.forEach {
-            AlarmEngine.scheduleAlarm(context, it)
-        }
-        val deadline = ClockStore.timerDeadline(context)
-        if (deadline > System.currentTimeMillis()) {
-            AlarmEngine.scheduleTimer(context, deadline)
-        }
-        // Preserve an overdue deadline. The foreground recovery path consumes it
-        // and tells the user that a notification might have been missed; clearing
-        // it here would silently erase that evidence after reboot/time changes.
+        // Shared with foreground resume: first detect overdue one-shot alarms,
+        // then restore eligible alarms and timers when permissions permit.
+        AlarmEngine.reconcileSchedules(context)
+        // Preserve an overdue timer deadline: foreground recovery explains that
+        // an alert might have been missed instead of erasing the evidence.
     }
 }
