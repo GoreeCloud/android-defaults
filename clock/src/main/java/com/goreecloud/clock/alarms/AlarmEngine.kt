@@ -134,7 +134,14 @@ object AlarmEngine {
         // Detect overdue one-shots even when permissions remain revoked.
         reconcileMissedOneShots(context, System.currentTimeMillis())
         if (!ready(context)) return
-        ClockStore.alarms(context).filter { it.enabled }.forEach { scheduleAlarm(context, it) }
+        ClockStore.alarms(context).filter { it.enabled }.forEach { alarm ->
+            // Do not overwrite a just-expired one-shot's durable due time.
+            // Wait for its broadcast, or diagnose a possible miss after grace.
+            val due = ClockStore.oneShotDue(context, alarm.id)
+            if (alarm.repeatDays != 0 || ClockMath.shouldRescheduleOneShot(due, System.currentTimeMillis())) {
+                scheduleAlarm(context, alarm)
+            }
+        }
         val deadline = ClockStore.timerDeadline(context)
         if (deadline > System.currentTimeMillis()) scheduleTimer(context, deadline)
     }
