@@ -147,7 +147,7 @@ jobs:
           grep -Fq "E: device-transfer" <<< "$extraction"
           "$aapt" dump xmltree "$apk" res/xml/backup_rules.xml > /dev/null
           echo "Clock APK identity, platform support, private receivers, offline permissions, and extraction rules verified."
-      - name: Verify Clock debug APK signature and record SHA-256
+      - name: Verify debug APK signing and SHA-256 provenance
         shell: bash
         run: |
           set -euo pipefail
@@ -155,127 +155,19 @@ jobs:
           test -s "$apk"
           sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           test -n "$sdk"
-          # Use the SDK's own apksigner; never fetch an unreviewed executable.
           apksigner="$(find "$sdk/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
-          test -n "$apksigner" && test -x "$apksigner"
-          # The signature verification command fails on invalid signatures.
-          # Only inspect DEBUG artifacts; never describe these as release signed.
+          test -x "$apksigner"
           signature="$("$apksigner" verify --verbose --print-certs "$apk")"
-          grep -Eq '^Signer #1 certificate SHA-256 digest: [0-9a-fA-F]{64}
-      # internal CI transport (the delivered installation file is standalone).
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: success()
-        with:
-          name: goreecloud-clock-debug-apk
-          path: clock/build/outputs/apk/debug/clock-debug.apk
-          if-no-files-found: error
-          retention-days: 7
-          archive: true
-
-
-  emulator-smoke:
-    # No owner devices or persistent cloud production resources are touched.
-    # This smoke job runs on a disposable Android 35 emulator only after
-    # the main JVM/build/Lint/privacy gate has passed.
-    needs: clock
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
-        with:
-          gradle-version: '9.5.0'
-      - name: Enable KVM on ephemeral GitHub-hosted runner
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      # Reviewed upstream action v2 at this exact commit. The only supplied
-      # script builds/runs the app's isolated Android instrumentation suite.
-      - name: Android 35 UI, PendingIntent, and privacy smoke tests
-        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          script: |
-            gradle :clock:connectedDebugAndroidTest --no-daemon --stacktrace
-            bash clock/scripts/capture-emulator-layouts.sh
-      # Screenshot ZIP is evidence transport only; APKs still must be delivered
-      # independently as standalone .apk in GoreeCloud/Artifacts.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: success()
-        with:
-          name: goreecloud-clock-emulator-screenshots
-          path: clock/build/reports/emulator-screenshots/*.png
-          if-no-files-found: error
-          retention-days: 7
-
-  emulator-smoke-api36:
-    # No owner devices or persistent cloud production resources are touched.
-    # This separate smoke job runs on a disposable Android 36 emulator after
-    # the main JVM/build/Lint/privacy gate has passed.
-    needs: clock
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
-        with:
-          gradle-version: '9.5.0'
-      - name: Enable KVM on ephemeral GitHub-hosted runner
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      # Reviewed upstream action v2 at this exact commit. The only supplied
-      # script builds/runs the app's isolated Android instrumentation suite.
-      - name: Android 36 UI, PendingIntent, and privacy smoke tests
-        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          script: |
-            gradle :clock:connectedDebugAndroidTest --no-daemon --stacktrace
-            bash clock/scripts/capture-emulator-layouts.sh
-      # Screenshot ZIP is evidence transport only; APKs still must be delivered
-      # independently as standalone .apk in GoreeCloud/Artifacts.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: success()
-        with:
-          name: goreecloud-clock-emulator-screenshots-api36
-          path: clock/build/reports/emulator-screenshots/*.png
-          if-no-files-found: error
-          retention-days: 7
- <<< "$signature"
+          grep -Eq '^Signer #1 certificate SHA-256 digest: [0-9a-fA-F]{64}$' <<< "$signature"
           if grep -Eq '^Signer #2 certificate' <<< "$signature"; then
-            echo "Unexpected multiple APK signers for debug Clock candidate." >&2
+            echo "Unexpected multiple Clock APK signers." >&2
             exit 1
           fi
           if ! grep -Eq '^Signer #1 certificate DN: .*CN=Android Debug' <<< "$signature"; then
-            echo "Clock debug APK has an unexpected signer identity; inspect before distributing any artifact." >&2
+            echo "Unexpected Clock debug signing certificate." >&2
             exit 1
           fi
-          printf 'DEBUG-ONLY Clock APK; signer is NOT approved for Stable.\n'
+          printf 'DEBUG-only APK. No release-signing identity approved.\n'
           sha256sum "$apk"
           grep -E '^Signer #1 certificate (SHA-256 digest|DN): ' <<< "$signature"
       # upload-artifact v7.0.2, exact upstream commit; retain ZIP only as
