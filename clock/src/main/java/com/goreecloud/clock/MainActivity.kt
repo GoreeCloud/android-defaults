@@ -94,6 +94,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.goreecloud.clock.alarms.AlarmEngine
 import com.goreecloud.clock.alarms.ClockMath
 import com.goreecloud.clock.alarms.ClockTimeFormat
+import com.goreecloud.clock.alarms.TimerStartTransaction
 import com.goreecloud.clock.data.ClockAlarm
 import com.goreecloud.clock.data.ClockStore
 import kotlinx.coroutines.delay
@@ -407,20 +408,23 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                             } else {
                                 val oldDeadline = ClockStore.timerDeadline(context)
                                 val oldRemaining = ClockStore.timerRemaining(context)
-                                // A receiver must never fire before its deadline is on disk.
-                                if (!ClockStore.setTimer(context, at, 0L)) {
-                                    notice = "Could not save the timer. Check available device storage."
-                                } else if (!AlarmEngine.scheduleTimer(context, at)) {
-                                    // Android may revoke exact-alarm access between checks.
-                                    val restored = ClockStore.setTimer(context, oldDeadline, oldRemaining)
-                                    notice = if (restored) {
-                                        "Unable to schedule the timer. Review Android alert permissions."
-                                    } else {
-                                        "Unable to schedule the timer or restore saved timer state."
+                                // The transaction enforces save-before-arm, including
+                                // the permission-race failure and rollback paths.
+                                when (TimerStartTransaction.start(
+                                    save = { ClockStore.setTimer(context, at, 0L) },
+                                    schedule = { AlarmEngine.scheduleTimer(context, at) },
+                                    restore = { ClockStore.setTimer(context, oldDeadline, oldRemaining) },
+                                )) {
+                                    TimerStartTransaction.Result.SAVE_FAILED ->
+                                        notice = "Could not save the timer. Check available device storage."
+                                    TimerStartTransaction.Result.SCHEDULE_FAILED ->
+                                        notice = "Unable to schedule the timer. Review Android alert permissions."
+                                    TimerStartTransaction.Result.RESTORE_FAILED ->
+                                        notice = "Unable to schedule the timer or restore saved timer state."
+                                    TimerStartTransaction.Result.STARTED -> {
+                                        deadline = at
+                                        pausedRemaining = 0L
                                     }
-                                } else {
-                                    deadline = at
-                                    pausedRemaining = 0L
                                 }
                             }
                         },
