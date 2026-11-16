@@ -78,6 +78,25 @@ class ClockRuntimeSmokeTest {
         }
     }
 
+    @Test fun timerDeadlineAndPauseStateAreDurablyCommittedBeforeReceiverUsesThem() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val oldDeadline = ClockStore.timerDeadline(context)
+        val oldRemaining = ClockStore.timerRemaining(context)
+        try {
+            val due = System.currentTimeMillis() + 90_000L
+            // No system alarm is armed: this tests the local state write boundary.
+            assertTrue(ClockStore.setTimer(context, due, 0L))
+            val freshPrefs = context.getSharedPreferences("clock_preferences", android.content.Context.MODE_PRIVATE)
+            assertEquals(due, freshPrefs.getLong("timer_deadline", 0L))
+            assertEquals(0L, ClockStore.timerRemaining(context))
+            assertTrue(ClockStore.setTimer(context, 0L, 37_000L))
+            assertEquals(0L, freshPrefs.getLong("timer_deadline", -1L))
+            assertEquals(37_000L, freshPrefs.getLong("timer_remaining", -1L))
+        } finally {
+            assertTrue(ClockStore.setTimer(context, oldDeadline, oldRemaining))
+        }
+    }
+
     @Test fun overdueTimerSurvivesBootForForegroundRecoveryNotice() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val oldDeadline = ClockStore.timerDeadline(context)
