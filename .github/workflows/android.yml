@@ -170,24 +170,34 @@ jobs:
             printf '%s\n' "$signature" >&2
             exit 1
           fi
-          if ! grep -Eq '^Signer #1 certificate SHA-256 digest: [0-9a-fA-F]{64}$' <<< "$signature"; then
-            echo "APK signing certificate SHA-256 metadata missing or malformed; exact SDK verification metadata follows." >&2
-            # Nonsecret debug-certificate metadata from a disposable CI runner.
+          # Build Tools 37 prefixes metadata with "V2 Signer:" rather than
+          # the older "Signer #1". Accept both formats, not arbitrary metadata.
+          if ! grep -Eq '^(Signer #[0-9]+ |V[0-9]+(\.[0-9]+)? Signer: )certificate SHA-256 digest: [0-9a-fA-F]{64}$' <<< "$signature"; then
+            echo "APK signing certificate SHA-256 metadata missing or malformed." >&2
             printf '%s\n' "$signature" >&2
             exit 1
           fi
-          if grep -Eq '^Signer #2 certificate' <<< "$signature"; then
-            echo "Unexpected multiple Clock APK signers." >&2
+          if ! grep -Eq '^Verified using v2 scheme .*: true$' <<< "$signature"; then
+            echo "Clock debug APK did not verify with Android APK Signature Scheme v2." >&2
             exit 1
           fi
-          if ! grep -Eq '^Signer #1 certificate DN: .*CN=Android Debug' <<< "$signature"; then
+          if grep -Eq '^Number of signers:' <<< "$signature"; then
+            if ! grep -Eq '^Number of signers: 1$' <<< "$signature"; then
+              echo "Unexpected number of Clock APK signers." >&2
+              exit 1
+            fi
+          elif grep -Eq '^Signer #2 certificate' <<< "$signature"; then
+            echo "Unexpected second Clock APK signer." >&2
+            exit 1
+          fi
+          if ! grep -Eq '^(Signer #[0-9]+ |V[0-9]+(\.[0-9]+)? Signer: )certificate DN: .*CN=Android Debug' <<< "$signature"; then
             echo "Unexpected debug signing certificate identity." >&2
-            grep -E '^Signer #1 certificate DN:' <<< "$signature" >&2 || true
+            grep -E 'certificate DN:' <<< "$signature" >&2 || true
             exit 1
           fi
           printf 'DEBUG-only APK. No release-signing identity approved.\n'
           sha256sum "$apk"
-          grep -E '^Signer #1 certificate (SHA-256 digest|DN): ' <<< "$signature"
+          grep -E 'certificate (SHA-256 digest|DN): ' <<< "$signature"
       # upload-artifact v7.0.2, exact upstream commit; retain ZIP only as
       # internal CI transport (the delivered installation file is standalone).
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
