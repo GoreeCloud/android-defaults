@@ -57,6 +57,9 @@ class ContactsActivity : Activity() {
     private val worker = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
         ArrayBlockingQueue<Runnable>(2), ThreadPoolExecutor.AbortPolicy())
     private val favorites by lazy { LocalFavorites(getSharedPreferences("favorites_local", MODE_PRIVATE)) }
+    private val screenProtection by lazy {
+        ScreenProtectionPreference(getSharedPreferences("screen_privacy_local", MODE_PRIVATE))
+    }
     private val permissionCode = 41
     private val exportCode = 42
     private val importCode = 43
@@ -64,6 +67,7 @@ class ContactsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyScreenProtection()
         tab = savedInstanceState?.getString("tab")?.takeIf {
             it in listOf("people", "favorites", "groups", "tools", "detail")
         } ?: "people"
@@ -97,9 +101,11 @@ class ContactsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        applyScreenProtection()
         if (::root.isInitialized) {
             if (hasAccess()) refresh() else {
                 invalidate()
+                pendingExport = null // Revocation invalidates an awaiting picker snapshot.
                 snapshot = null
                 drawBody()
             }
@@ -122,6 +128,7 @@ class ContactsActivity : Activity() {
         if (requestCode == permissionCode) {
             if (hasAccess()) refresh() else {
                 invalidate()
+                pendingExport = null // Revocation invalidates an awaiting picker snapshot.
                 snapshot = null
                 drawBody()
             }
@@ -131,8 +138,36 @@ class ContactsActivity : Activity() {
     override fun onDestroy() {
         destroyed = true
         invalidate()
+        pendingExport = null
         worker.shutdownNow()
         super.onDestroy()
+    }
+
+    /** Optional Android window privacy; private-note dialogs remain protected separately. */
+    private fun applyScreenProtection() {
+        val flag = android.view.WindowManager.LayoutParams.FLAG_SECURE
+        if (screenProtection.isEnabled()) window.addFlags(flag)
+        else window.clearFlags(flag)
+    }
+
+    private fun confirmChangeScreenProtection() {
+        val enable = !screenProtection.isEnabled()
+        AlertDialog.Builder(this)
+            .setTitle(if (enable) "Protect Contacts screen?" else "Allow screen captures?")
+            .setMessage(if (enable)
+                "Android will block most screenshots, screen recording and app previews " +
+                    "of GoreeCloud Contacts. This may also limit screen sharing. " +
+                    "It cannot stop external cameras."
+                else "Screenshots, screen recording and app previews of normal " +
+                    "GoreeCloud Contacts screens may be allowed again. " +
+                    "Private note reveal dialogs stay protected independently.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton(if (enable) "Enable protection" else "Disable protection") { _, _ ->
+                screenProtection.setEnabled(enable)
+                applyScreenProtection()
+                drawBody()
+            }
+            .show()
     }
 
     private fun hasAccess() = checkSelfPermission(Manifest.permission.READ_CONTACTS) ==
@@ -649,10 +684,8 @@ class ContactsActivity : Activity() {
             " possible matches · Suggestions only; no records will be merged.",
             14f, R.color.muted).apply { setPadding(0, px(8), 0, px(10)) })
         clusters.take(15).forEach { cluster ->
-            duplicateCard.addView(action(cluster.joinToString(" / ") { it.name }) {
-                selectedContact = cluster.first().id
-                tab = "detail"
-                drawShell()
+            duplicateCard.addView(action(DuplicateCandidateReview.heading(cluster)) {
+                reviewDuplicateCandidates(cluster)
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = px(7) })
@@ -672,10 +705,37 @@ class ContactsActivity : Activity() {
         privacy.addView(label(favoriteKeys().size.toString() + " app-local favorite markers",
             13f, R.color.muted).apply { setPadding(0, px(10), 0, px(10)) })
         privacy.addView(action("Clear app-local favorites") { confirmClearLocalFavorites() })
+        privacy.addView(label(
+            if (screenProtection.isEnabled()) "Screen capture protection is ON"
+            else "Screen capture protection is OFF",
+            13f, R.color.muted).apply { setPadding(0, px(12), 0, px(8)) })
+        privacy.addView(action(
+            if (screenProtection.isEnabled()) "Disable screen protection"
+            else "Enable screen protection"
+        ) { confirmChangeScreenProtection() })
         container.addView(privacy)
         scroll.addView(container)
         body.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    }
+
+    /** Read-only candidate chooser; the user decides which profile to inspect. */
+    private fun reviewDuplicateCandidates(cluster: List<ContactEntry>) {
+        val choices = DuplicateCandidateReview.choices(cluster)
+        if (choices.isEmpty()) return
+        val title = if (cluster.size > choices.size)
+            "Review suggestions (" + choices.size + " of " + cluster.size + ")"
+        else "Review duplicate suggestions"
+        // Avoid mixing setMessage with setItems: OEM dialogs may not display both.
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(choices.map { it.title }.toTypedArray()) { _, index ->
+                selectedContact = choices[index].contactId
+                tab = "detail"
+                drawShell()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showDetail(data: DirectorySnapshot) {
@@ -1126,7 +1186,12 @@ class ContactsActivity : Activity() {
         val requested = pendingExport
         pendingExport = null
         val destination = data?.data
-        if (resultCode != RESULT_OK || destination == null || requested == null) return
+        // A document picker selection is not a substitute for live Contacts access.
+        if (!ContactExportAuthorization.mayStart(
+                readContactsGranted = hasAccess(),
+                pickerConfirmed = resultCode == RESULT_OK && destination != null,
+                selectedSnapshotPresent = !requested.isNullOrEmpty()
+            ) || destination == null || requested == null) return
         try {
             worker.execute {
                 val success = try {
@@ -1136,6 +1201,8 @@ class ContactsActivity : Activity() {
                     val csv = requestCode == csvExportCode
                     if (csv) CsvContactsExport.validate(requested)
                     else ContactLogic.validateExport(requested)
+                    // The queued worker may start after permission was revoked.
+                    if (!hasAccess()) throw SecurityException("Contacts permission revoked")
                     val stream = contentResolver.openOutputStream(destination, "wt")
                         ?: throw IllegalStateException("Document cannot be opened")
                     OutputStreamWriter(stream, Charsets.UTF_8).use { writer ->

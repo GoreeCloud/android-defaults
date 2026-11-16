@@ -42,7 +42,13 @@ object PhoneMatcher {
         for (char in normalized) {
             val index = alphabet.indexOfFirst { char in it }
             if (index >= 0) append(index + 2)
-            else if (char.isDigit()) append(char)
+            else if (char.isDigit()) {
+                // T9 query digits are normalized to ASCII. Keep digits in
+                // contact names in the same alphabet, including Arabic-Indic
+                // and fullwidth decimal digits, without altering call targets.
+                val digit = Character.digit(char, 10)
+                if (digit in 0..9) append(('0'.code + digit).toChar())
+            }
         }
     }
 

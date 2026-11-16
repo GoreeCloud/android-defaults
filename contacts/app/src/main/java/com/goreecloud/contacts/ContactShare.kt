@@ -35,6 +35,15 @@ object ContactShare {
                         Character.isHighSurrogate(value[i - 1]))) {
                     "Invalid Unicode contact detail"
                 }
+                // Refuse bidi overrides and isolate marks instead of letting
+                // an external share sheet mislabel or reverse selected values.
+                // These are invisible formatting controls, not user-visible
+                // international letters, numbers, or valid emoji.
+                val point = char.code
+                require(point != 0x061C && point != 0x200E && point != 0x200F &&
+                    point !in 0x202A..0x202E && point !in 0x2066..0x2069) {
+                    "Invalid Unicode share formatting"
+                }
                 append(if (Character.isISOControl(char) ||
                     char == '\u2028' || char == '\u2029') ' ' else char)
             }

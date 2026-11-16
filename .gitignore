@@ -6,7 +6,7 @@
 *.apk
 *.aab
 .DS_Store
-# Never stage local Android signing credentials or SDK build capture outputs.
+# Keep local Android signing secrets and generated captures untracked.
 *.jks
 *.keystore
 **/.cxx/

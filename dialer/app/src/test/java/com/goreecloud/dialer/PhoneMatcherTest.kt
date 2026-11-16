@@ -36,6 +36,14 @@ class PhoneMatcherTest {
         assertFalse(PhoneMatcher.matches("999", "Alice", "555-0100"))
     }
 
+    @Test fun unicodeDigitsInContactNamesMatchNormalizedT9KeypadQueries() {
+        assertEquals("6632", PhoneMatcher.t9("Moe ٢"))
+        assertEquals("6633", PhoneMatcher.t9("Moe ３"))
+        assertTrue(PhoneMatcher.matches("6632", "Moe ٢", "555-0100"))
+        assertTrue(PhoneMatcher.matches("٦٦٣٢", "Moe ٢", "555-0100"))
+        assertFalse(PhoneMatcher.matches("6634", "Moe ٢", "555-0100"))
+    }
+
     @Test fun emptyQueryDoesNotMatchAllContacts() {
         assertFalse(PhoneMatcher.matches("", "Alice", "555-0100"))
         assertFalse(PhoneMatcher.matches("#", "Alice", "555-0100"))

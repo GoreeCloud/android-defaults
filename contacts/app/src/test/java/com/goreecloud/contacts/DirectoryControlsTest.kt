@@ -65,11 +65,13 @@ class DirectoryControlsTest {
         assertTrue(select(group = 999).isEmpty())
     }
 
-    @Test fun extendedFieldsRemainOnlyInLocalSearch() {
+    @Test fun visibleExtendedDetailsSearchButPrivateNotesRequireReveal() {
         val privateContact = ContactEntry(5, "private", "Morgan",
             notes = listOf("private project"), addresses = listOf("Test Square"),
             importantDates = listOf(ImportantDate("Birthday", "--11-09")))
-        assertTrue(DirectoryControls.matches(privateContact, "project"))
+        assertFalse(DirectoryControls.matches(privateContact, "project"))
+        assertFalse(DirectoryControls.matches(privateContact, "private"))
+        assertTrue(DirectoryControls.matches(privateContact, "morgan"))
         assertTrue(DirectoryControls.matches(privateContact, "birthday"))
         assertTrue(DirectoryControls.matches(privateContact, "square"))
         assertFalse(DirectoryControls.matches(privateContact, "other"))

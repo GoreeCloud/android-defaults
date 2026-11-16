@@ -12,11 +12,34 @@ object CsvContactsExport {
     /** Prevent spreadsheet formula execution even after whitespace or invisible prefix marks. */
     private fun cell(original: String): String {
         require(original.length <= MAX_CELL_CHARS) { "CSV contact field limit exceeded" }
+        // Android providers can return malformed UTF-16. Java/Kotlin's default
+        // UTF-8 encoder silently substitutes unpaired surrogates; refuse a CSV
+        // field rather than export different data than the user approved.
+        var index = 0
+        while (index < original.length) {
+            val value = original[index]
+            if (Character.isHighSurrogate(value)) {
+                require(index + 1 < original.length &&
+                    Character.isLowSurrogate(original[index + 1])) {
+                    "Invalid Unicode contact field"
+                }
+                index += 2
+            } else {
+                require(!Character.isLowSurrogate(value)) {
+                    "Invalid Unicode contact field"
+                }
+                index++
+            }
+        }
         require(original.none {
             Character.isISOControl(it) && it != '\r' && it != '\n' && it != '\t'
         }) { "Invalid CSV control character" }
         val candidate = original.dropWhile {
-            it.isWhitespace() || Character.isISOControl(it) || it == '\u200B' || it == '\uFEFF'
+            // Unicode format marks (Cf) include zero-width joiners, direction
+            // marks and BOM. Some spreadsheet engines hide these before a
+            // formula prefix; treat them as ignorable for injection checks.
+            it.isWhitespace() || Character.isISOControl(it) ||
+                Character.getType(it) == Character.FORMAT.toInt()
         }
         val risky = candidate.firstOrNull() in listOf('=', '+', '-', '@')
         val value = if (risky) "'" + original else original

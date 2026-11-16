@@ -1,10 +1,13 @@
 package com.goreecloud.contacts
 
 import android.database.Cursor
+import android.database.CursorWrapper
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
+import android.os.SystemClock
+import android.util.Log
 import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -46,7 +49,9 @@ class ContactsRepositorySyntheticTest {
         throwAt: String? = null,
         maxContacts: Int = 10000,
         maxRelated: Int = 60000,
-        malformedAt: String? = null
+        malformedAt: String? = null,
+        cancelOnExhaustionAt: String? = null,
+        cancelOnCloseAt: String? = null
     ): ContactsRepository {
         val fake: (
             Uri, Array<String>, String?, Array<String>?, String?, CancellationSignal
@@ -57,8 +62,24 @@ class ContactsRepositorySyntheticTest {
             if (target == nullAt) null
             else {
                 val columns = if (target == malformedAt) arrayOf("missing_column") else projection
-                MatrixCursor(columns).apply {
+                val data = MatrixCursor(columns).apply {
                     rows[target].orEmpty().forEach { addRow(it) }
+                }
+                when (target) {
+                    cancelOnExhaustionAt -> object : CursorWrapper(data) {
+                        override fun moveToNext(): Boolean {
+                            val available = super.moveToNext()
+                            if (!available) signal.cancel()
+                            return available
+                        }
+                    }
+                    cancelOnCloseAt -> object : CursorWrapper(data) {
+                        override fun close() {
+                            super.close()
+                            signal.cancel()
+                        }
+                    }
+                    else -> data
                 }
             }
         }
@@ -236,6 +257,44 @@ class ContactsRepositorySyntheticTest {
             .load(CancellationSignal()) }
     }
 
+    /**
+     * Captures a reproducible 5k/10k provider traversal baseline on a disposable
+     * emulator. There is deliberately no brittle wall-clock pass/fail threshold:
+     * this does not measure RecyclerView recycling, UI jank or OEM provider time.
+     */
+    @Test fun fiveAndTenThousandSyntheticRecordsRemainCompleteAndBounded() {
+        for (count in listOf(5000, 10000)) {
+            val contacts = ArrayList<Array<Any?>>(count)
+            for (id in 1..count) {
+                contacts.add(arrayOf<Any?>(
+                    id.toLong(), "fixture-key-$id", "Synthetic fixture $id"
+                ))
+            }
+            val started = SystemClock.elapsedRealtime()
+            val result = repository(
+                rows = mapOf("contacts" to contacts),
+                maxContacts = 10000
+            ).load(CancellationSignal())
+            val elapsed = SystemClock.elapsedRealtime() - started
+            assertEquals(count, result.contacts.size)
+            assertEquals(count, result.contacts.map { it.id }.toSet().size)
+            assertTrue(result.contacts.all { it.phones.isEmpty() && it.notes.isEmpty() })
+            assertTrue(elapsed >= 0L)
+            // Safe public CI signal: synthetic row count and monotonic duration only.
+            Log.i("GoreeCloudSyntheticContactsQA", "rows=$count elapsedMs=$elapsed")
+        }
+    }
+
+    @Test fun tenThousandAndOneSyntheticRecordsCannotSilentlyTruncate() {
+        val contacts = (1..10001).map { id ->
+            arrayOf<Any?>(id.toLong(), "fixture-key-$id", "Synthetic fixture $id")
+        }
+        fails {
+            repository(rows = mapOf("contacts" to contacts), maxContacts = 10000)
+                .load(CancellationSignal())
+        }
+    }
+
     @Test fun exactPerContactChannelLimitIsAccepted() {
         val n = ContactsRepository.MAX_CHANNELS_PER_CONTACT
         val snap = repository(mapOf(
@@ -247,5 +306,45 @@ class ContactsRepositorySyntheticTest {
         assertEquals(n, snap.contacts.single().phones.size)
     }
 
+    @Test fun providerCancellationAtFinalCursorExhaustionRejectsSnapshot() {
+        // A provider can cancel while moveToNext() returns false. No prior
+        // per-row check can authenticate a supposedly complete directory.
+        val signal = CancellationSignal()
+        try {
+            repository(
+                rows = mapOf("contacts" to listOf(arrayOf(11L, "lookup-a", "Alice"))),
+                cancelOnExhaustionAt = "notes"
+            ).load(signal)
+            fail("A canceled final cursor must never publish contact data")
+        } catch (_: OperationCanceledException) {
+            assertTrue(signal.isCanceled)
+        }
+    }
 
+    @Test fun providerCancellationDuringFinalCursorCloseRejectsSnapshot() {
+        val signal = CancellationSignal()
+        try {
+            repository(
+                rows = mapOf("contacts" to listOf(arrayOf(11L, "lookup-a", "Alice"))),
+                cancelOnCloseAt = "notes"
+            ).load(signal)
+            fail("A canceled final cursor close must never publish contact data")
+        } catch (_: OperationCanceledException) {
+            assertTrue(signal.isCanceled)
+        }
+    }
+
+    @Test fun duplicateOrNonPositiveProviderContactIdsRejectPartialDirectory() {
+        val rows = listOf(
+            listOf(arrayOf<Any?>(11L, "first", "Alice"),
+                arrayOf<Any?>(11L, "second", "Bob")),
+            listOf(arrayOf<Any?>(0L, "zero", "Invalid")),
+            listOf(arrayOf<Any?>(-1L, "negative", "Invalid"))
+        )
+        for (contacts in rows) {
+            fails {
+                repository(mapOf("contacts" to contacts)).load(CancellationSignal())
+            }
+        }
+    }
 }

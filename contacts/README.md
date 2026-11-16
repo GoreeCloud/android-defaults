@@ -1,5 +1,7 @@
 # GoreeCloud Contacts — Android
 
+> **Legacy source location (November 11, 2026).** Current GoreeCloud Contacts development is in the standalone [GoreeCloud/contacts](https://github.com/GoreeCloud/contacts) repository, migrated in [Contacts PR #1](https://github.com/GoreeCloud/contacts/pull/1). This monorepo module remains a compatibility/rollback snapshot while its CI and Clock/Dialer consumers are reconciled. It is **not** the new development authority; no Android user data was moved.
+
 A separate native Kotlin Android application in the GoreeCloud Android Defaults monorepo.
 
 **Maturity: 0.1.0 development preview, not a certified replacement for the device's contacts application.** Android-only, independent from the Dialer. Minimum API 26; compile and target SDK 35.
@@ -9,16 +11,17 @@ A separate native Kotlin Android application in the GoreeCloud Android Defaults 
 - On-device Android Contacts Provider read with explicit READ_CONTACTS runtime consent. No contact data upload.
 - Fail-closed provider budgets limit identity/communication field lengths and per-contact phone/email/group cardinality. Abnormal provider responses never silently truncate the directory.
 - Accent-insensitive search of names, organizations and local details, including phone-digit matching across formatting; selectable name/organization/favorites-first sorting and with-phone/with-email filters; app-local favorites and read-only Android groups.
-- Profile cards with phone/email/organization and locally read formatted addresses, important dates and notes (private notes hidden until a secure, explicit reveal dialog); add/edit through Android system contact intents. A postal-address map handoff asks for explicit consent and uses a user-selected maps app without device-location access. Private extended details remain absent from the current share and export paths.
+- Profile cards with phone/email/organization and locally read formatted addresses, important dates and notes (private notes hidden until a secure, explicit reveal dialog). Ordinary directory search excludes private note text to avoid revealing it through keyword probes; add/edit through Android system contact intents. A postal-address map handoff asks for explicit consent and uses a user-selected maps app without device-location access. Private extended details remain absent from the current share and export paths.
 - Call via ACTION_DIAL and compose SMS/email via installed apps; selectively share individual name/phone/email fields with none preselected, explicit payload preview and a recipient-app chooser. Private notes and addresses remain excluded.
-- Read-only duplicate suggestions by normalized phone/email.
+- Read-only duplicate suggestions by normalized phone/email, with a bounded candidate chooser to inspect each suggested profile without automatic merge.
 - Local upcoming birthday and anniversary overview (next 90 days), excluding custom one-off dates and with no background reminders or age inference.
-- User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization.
+- User-initiated vCard export to a Storage Access Framework destination, covering name, phone, email and organization. Preflight refuses Unicode directional-format controls and Unicode line separators that could visually spoof a recipient's record or be refused by the limited local importer; ordinary multilingual text is preserved.
 - **Scoped export:** choose an individual profile, favorites or an existing Android group and export only those records as vCard or CSV after explicit confirmation.
 - User-initiated **CSV export** for limited contact fields, preflighted for field/size limits and spreadsheet-formula injection protection before opening a user-selected destination.
 - **Single-contact vCard import preview** for strict UTF-8 vCard 3/4 (up to 128 KiB): choose a file, review supported data and omissions, then open Android's user-confirmed insert editor. No direct provider inserts or automatic bulk import.
 - Offline-only design with no INTERNET, WRITE_CONTACTS, call or SMS permission; no telemetry or server.
 - GoreeShield privacy control to show and clear all **app-local** favorite markers after a clear warning; Android system STARRED and contacts remain untouched.
+- Optional user-confirmed Android screen-capture protection for normal Contacts windows (OFF by default); private note reveal dialogs remain protected independently.
 - Floating bottom navigation, responsive native UI and semantic light/dark surfaces.
 - Recycled, stable-ID ListView rows for lower allocation during directory scrolling; all visible text and favorite markers are rebound on reuse. Performance profiling on 5,000–10,000 synthetic contacts and OEM devices remains pending.
 

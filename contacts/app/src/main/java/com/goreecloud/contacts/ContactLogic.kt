@@ -32,13 +32,13 @@ object ContactLogic {
     fun groupContacts(contacts: List<ContactEntry>, groupId: Long):
         List<ContactEntry> = contacts.filter { groupId in it.groupIds }
 
+    /** Search the visible directory fields only; hidden note text must not be probed. */
     fun matches(contact: ContactEntry, search: String): Boolean {
         val terms = search.trim().lowercase(Locale.ROOT).split(Regex("\\s+"))
             .filter { it.isNotBlank() }
         val text = listOf(contact.name, contact.organization)
             .plus(contact.phones).plus(contact.emails)
             .plus(contact.addresses).plus(contact.importantDates.map { it.label + " " + it.value })
-            .plus(contact.notes)
             .joinToString(" ").lowercase(Locale.ROOT)
         return terms.all { text.contains(it) }
     }
@@ -128,6 +128,13 @@ object ContactLogic {
         require(text.none { Character.isISOControl(it) && it != '\r' && it != '\n' }) {
             "Contact field has an invalid control character"
         }
+        // These rendering and bidi format controls can spoof vCard field
+        // previews while the conservative import parser refuses them. Keep
+        // export/import in agreement; ordinary Unicode letters/emoji remain.
+        require(text.none { ch ->
+            ch == '\u061C' || ch in '\u200E'..'\u200F' ||
+                ch in '\u2028'..'\u202E' || ch in '\u2066'..'\u2069'
+        }) { "Contact vCard field contains a spoofable directional control" }
         return text
         .replace("\\", "\\\\")
         .replace("\r\n", "\n")

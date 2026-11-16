@@ -1,0 +1,34 @@
+name: Android Defaults source admission
+
+# A stable, inexpensive status for EVERY PR, including documentation-only PRs.
+# This is not branch protection and is NOT a substitute for Contacts or Dialer
+# compiled Android, permission and disposable-emulator acceptance workflows.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-defaults-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify all workflow trigger, action pin and token policies
+        run: |
+          python3 ci/check_merge_admission.py
+          python3 -m unittest discover -s ci/tests -p 'test_*.py' -v
+      - name: Verify synthetic Android device admission and history readiness
+        run: |
+          bash ci/test-emulator-only.sh
+          bash contacts/ci/test-fresh-hierarchy.sh
+          python3 -m unittest discover -s dialer/ci/tests -p 'test_*.py' -v

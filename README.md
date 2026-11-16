@@ -8,16 +8,14 @@ The [Dialer source](dialer/) is a Kotlin Android application intended to request
 
 **Development preview only.** The app has not yet been accepted on physical devices or approved as an emergency-calling replacement. Read the [Dialer setup and feature status](dialer/README.md) before changing your default phone app.
 
-## GoreeCloud Contacts
+## GoreeCloud Contacts — standalone repository
 
-The [Contacts source](contacts/) is a separate native Kotlin Android development preview with opt-in on-device contact reading, search, app-local favorites, native group browsing, contact details, user-confirmed Android add/edit, calling/messaging shortcuts, explicit sharing and partial vCard export, and duplicate suggestions. It declares **no Internet or WRITE_CONTACTS permission**.
+**Authoritative source:** [GoreeCloud/contacts](https://github.com/GoreeCloud/contacts), migrated through [Contacts PR #1](https://github.com/GoreeCloud/contacts/pull/1) with the 33 Contacts-specific commits preserved on its `main` branch. It remains an **Android-only development preview**, not an accepted default app or a deployed CardDAV client. The package identity `com.goreecloud.contacts` and offline-first permission model were retained.
 
-See [Contacts setup, limitations and feature register](contacts/README.md). The Dialer and Contacts remain independent applications with distinct package identities.
+The [previous monorepo Contacts module](contacts/) and [its original documentation](contacts/README.md) are kept temporarily for legacy CI/other module compatibility, source provenance and rollback, **not as the owner of new Contacts development**. Do not remove it until active consumers and native acceptance are verified. The Dialer and Contacts remain independently packaged products; no installed personal contacts or device roles were migrated by the repository change.
 
-## GoreeCloud Clock (draft integration candidate)
+## GoreeCloud Clock — draft integration candidate
 
-The [Clock module](clock/) is staged on **this integration branch only**, alongside the unmodified Dialer and Contacts modules. It is a Kotlin/Jetpack Compose Android development preview with **Alarms**, **Timer**, **Stopwatch**, and **Settings**. It has no Internet permission and stores its settings locally. Review the [Clock feature and privacy notes](docs/clock.md) before installing or relying on it.
+This development branch stages the [native Kotlin/Jetpack Compose Clock module](clock/) beside the existing Dialer and preserved Contacts compatibility module. Clock offers local Alarms, Timer, Stopwatch and Settings; it requires Android notification and exact-alarm permissions for alerting. See the [Clock limitations and privacy notes](docs/clock.md).
 
-For disposable development CI, run `gradle :clock:testDebugUnitTest :clock:assembleDebug :clock:lintDebug` from the repository root using JDK 17 and the workflow-provisioned Gradle 9.5/Android SDK 35. The root Clock Gradle project is separate from the existing `contacts/` and `dialer/` Gradle builds; their existing checks remain intact.
-
-**Merge and release gates remain open:** the original [Clock PR #1](https://github.com/GoreeCloud/android-defaults/pull/1) was developed separately and does not represent merged `main`. A working combined tree and green hosted emulator tests do **not** verify physical alarm audibility, Android background behavior, accessibility, safe upgrade, or stable APK delivery. **License reconciliation is also required**: the current repository has a MIT `LICENSE`, but the original Clock branch described its source license as undecided. Do not infer resolution or authorize a main-branch release from this staging work.
+Clock remains **draft, unmerged and not a verified system-alarm replacement**. Physical-device reliability, accessible interface review, release signing, backup behavior and [source-license reconciliation](https://github.com/GoreeCloud/android-defaults/issues/46) are outstanding. Combined automated CI and emulator checks do not constitute those release approvals.

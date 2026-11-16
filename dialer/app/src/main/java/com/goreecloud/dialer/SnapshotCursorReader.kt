@@ -17,7 +17,7 @@ internal object SnapshotCursorReader {
         map: (Cursor) -> T?
     ): List<T> {
         val actual = cursor ?: throw IllegalStateException("Provider returned a null cursor")
-        return actual.use { source ->
+        val snapshot = actual.use { source ->
             // Even cancellation or a bad limit must release an acquired cursor.
             require(maxRecords in 1..10000)
             signal.throwIfCanceled()
@@ -33,5 +33,9 @@ internal object SnapshotCursorReader {
             signal.throwIfCanceled()
             output
         }
+        // Cursor.close() itself can signal cancellation after the last row
+        // check. Do not publish an apparently complete contacts/call-log result.
+        signal.throwIfCanceled()
+        return snapshot
     }
 }

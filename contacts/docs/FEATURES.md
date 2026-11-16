@@ -2,12 +2,17 @@
 
 **Scope: Android only.** Source implementation is not evidence of release, device acceptance or all-platform support.
 
+**vCard export preview integrity (November 10, 2026):** Before the user-selected document is opened, name, phone, email and organization values now fail closed on Unicode bidi directional overrides/isolates, rendering marks and U+2028/U+2029 line separators that can spoof a displayed record or fail the strict one-card importer. The original UTF-8 folding, ordinary international writing, field limits and consent gate remain. Pure JVM tests validate synthetic rejection and multilingual acceptance; no live provider data, real-device acceptance, CardDAV write or production release is implied.
+
+**Private-note search privacy (November 10, 2026):** The original local directory matchers included hidden note text, even when the notes were masked in profile cards. This could disclose whether a contact carried a searched keyword without an explicit reveal. The development fix excludes note contents from default directory filtering and the legacy contact matcher; visible names, phones, emails, organizations, addresses and date labels remain searchable. Notes are still available only through the existing affirmative, secure reveal dialog. Pure JVM regressions cover both matchers. This is not encryption, provider-level access control or a physical-device privacy certification.
+
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Native Android directory | Implemented in source | Permission-gated background Contacts Provider reads |
 | Name, number, email and organization search | Implemented in source | Pure JVM matching tests |
 | Accent-insensitive and formatted-phone search; local sort/filter | Implemented in source; CI pending | Read-only view settings: name, organization or favorites-first; with-phone/with-email filters; session/restored-screen state only |
 | Favorites | Implemented in source | App-private preference, not system STARRED; explicit user-confirmed clear-all control (CI pending) |
+| Optional Contacts screen-capture protection | Implemented in draft source; per-head CI required | Explicit confirmation and reversible app-window FLAG_SECURE; disabled by default, note dialogs independently secure |
 | Groups | Implemented in source | Read-only Android group membership |
 | Add and edit | Implemented in source | User-confirmed Android intents; no direct writes |
 | Calls, SMS and email | Implemented in source | Delegate to compatible installed apps |
@@ -18,7 +23,7 @@
 | Favorite/group-scoped exports | Implemented in source; CI pending | Explicit subset selection followed by existing export confirmations and SAF destination; no background transfers |
 | Limited CSV export | Implemented in source; per-commit CI required | Name/phone/email/organization, formula-neutralized quoted CSV, full preflight, explicit SAF save picker; not lossless |
 | Single vCard import preview | Source and API26/35/36 emulator CI passed in PR #24; OEM editor acceptance open | Explicit SAF file selection; UTF-8 vCard 3/4 single-record strict parse; preview omitted fields and Android user-confirmed editor; no silent writes |
-| Duplicate review | Implemented in source | Suggestions only; no direct merge |
+| Duplicate review | Implemented in source | Read-only bounded candidate chooser opens any suggested profile; no direct merge |
 | Floating dock and semantic themes | Implemented in source | Rendered device/GC UI review pending |
 | Postal addresses, birthdays, anniversaries, custom dates and notes | Implemented in source; note-privacy CI pending | Read-only bounded Android Data queries; notes hidden by default behind explicit secure dialog; excluded from share/export |
 | Read-only upcoming birthdays and anniversaries | Implemented in source; CI pending | Next 90 days, local calculations, no calendar writes, reminders or age inference |
@@ -43,10 +48,28 @@ A new entirely synthetic MatrixCursor instrumentation suite checks null/empty,
 field joins/deduplication, malformed records, cancellation and row caps.
 Those tests never access real contacts, modify system accounts or claim OEM
 provider-fault / load-testing acceptance. The actual query can still block in
-OEM/provider code; cancellation is cooperative, not guaranteed.
+OEM/provider code; cancellation is cooperative, not guaranteed. A provider may
+report cancellation only as its final cursor is exhausted or closed: the
+repository now rechecks cancellation at both boundaries and refuses a
+completed-looking snapshot. Synthetic instrumentation also rejects duplicated,
+zero or negative provider contact IDs rather than silently overwriting one
+record with another. Disposable API26/35/36 instrumentation now also constructs
+5,000- and 10,000-entry synthetic-only Contacts Provider cursors, verifies no
+rows are silently lost or duplicated, logs *only* row counts and monotonic
+traversal time, and rejects 10,001 entries at the documented 10,000-contact
+limit. These tests are a reproducible provider-memory/integrity baseline,
+**not** a recycled UI-row benchmark, strict latency SLA, a full populated-device
+stress test or a solution to OEM query hangs. They cannot force an uncooperative
+OEM provider to finish or prove performance on physical devices.
 
 **Export safety:** The selected destination is opened only after a full
-read-only in-memory preflight of every vCard. Limits are 10,000 contacts,
+read-only in-memory preflight of every vCard. Pending export snapshots are now
+cleared when Contacts access is revoked, and a successful document-picker
+result does not authorize an export after READ_CONTACTS permission is lost.
+Permission is rechecked on picker return and by the queued worker immediately
+before opening the user-chosen destination. These checks cannot retroactively
+revoke a write that has already begun or make external providers atomic.
+Limits are 10,000 contacts,
 10 MiB total, 128 KiB per card, 4,096 characters per field and 100 fields
 per phone/email kind. Oversized/invalid inputs fail without deliberate
 truncation. This preview does not guarantee atomic writes when an external
@@ -74,13 +97,23 @@ lines, oversized fields, multi-card documents and excessive phone/email values.
 The preview clearly lists supported fields and counts omitted properties.
 Only after affirmative approval is a prefilled Android contact-insert editor
 opened; the user still chooses the account and taps Save. The app does not
-write Contacts Provider records itself. This does **not** claim full import,
-RFC-complete fidelity or safe import of external attachments/photos.
+write Contacts Provider records itself. The limited FN/TEL/EMAIL/ORG
+preview rejects bidi formatting/isolate controls, Unicode line/paragraph
+separators and malformed UTF-16 rather than copying visually deceptive or
+lossy fields into the prefilled editor; ordinary international text, escaped
+vCard newlines and valid supplementary Unicode remain supported. This
+conservative policy may reject otherwise displayable vCards containing bidi
+formatting marks; it does **not** silently rewrite source fields or claim full
+import, RFC-complete fidelity or safe import of external attachments/photos.
 
 **Limited CSV export:** User-selected `text/csv` destination and explicit
 confirmation. Values are quoted for CSV, leading formula-like payloads are
 prefixed with a literal apostrophe, and all rows are preflighted against
-field, count and byte limits before the document is opened. Multiple
+field, count and byte limits before the document is opened. CSV
+preflight also rejects lone/misordered UTF-16 surrogate code units from
+provider data rather than silently replacing approved characters during UTF-8
+encoding; valid paired supplementary Unicode is preserved. This applies to
+all four exported columns including joined phone/email values. Multiple
 phone/email values are joined in one column, so this is deliberately not a
 round-trip backup. External document providers can still leave a partial
 file if writing fails after opening; no atomicity or encryption is claimed.
@@ -152,8 +185,11 @@ format validation remain open.
 profile, the user can select individual name, telephone or email fields to
 share. **Nothing is preselected**; only the affirmative selections appear in
 an exact second-stage preview before the system recipient chooser. The
-share payload removes control-character line breaks and refuses malformed or
-oversized values. Organization, private notes, addresses, dates, account
+share payload removes control-character line breaks and refuses malformed,
+oversized or Unicode bidi-formatting-controlled **selected** values before the
+second-stage share preview. Valid international text and emoji remain intact;
+an unsafe but *unselected* field cannot block or leak into another selected
+field. Organization, private notes, addresses, dates, account
 information and other unselected details are excluded. The profile also
 offers vCard or CSV export of **that single contact only**, reusing the
 existing explicit document-location picker, count/size preflight and limited
@@ -221,3 +257,35 @@ tests cover oversized identity, phones, emails, organization and group names;
 phone/email/group limits and an exact-limit positive case. Limits protect
 reliability but may reject exotic OEM address books; pagination and streaming
 are still needed for production-scale coverage.
+
+**Review each duplicate candidate (this PR):** Selecting a potential
+duplicate cluster opens a non-destructive dialog showing up to twenty
+contact names, with no automatic choice of the first person. The user can
+open any listed candidate's existing profile. The dialog intentionally
+omits phone numbers, emails, organization, notes and other private fields;
+names are sanitized for control characters, and large clusters are
+explicitly capped. Pure JVM tests verify candidate identity, ordering,
+privacy omissions and limits. No Contacts Provider mutation, deletion,
+merging, telemetry, new permission or network operation is introduced.
+
+**Bounded upcoming-date selection (this PR):** The next-90-days overview
+now keeps at most the requested 1–50 candidates in a worst-first heap rather
+than materializing and sorting every matching event. It returns the same
+ascending date/name/contact-ID ordering while reducing selection memory to
+O(maxResults), independent of total contact count. Pure JVM regressions
+cover a synthetic 5,000-contact directory, top-one selection and date order.
+Provider reads, date inference, permissions, reminders and UI behavior are
+unchanged; OEM performance benchmarks and real populated-device reviews
+remain required.
+
+**Optional GoreeShield window protection (draft integration):** The Tools view
+allows users to opt in to Android `FLAG_SECURE` with an explicit confirmation.
+The setting defaults OFF to preserve ordinary screenshots, screen sharing and
+accessible workflows unless a user turns it ON. Android blocks many app-window
+captures and recent-app previews while enabled, but cannot stop cameras or
+all OEM capture paths. Disabling after confirmation removes protection from
+normal windows; a separately protected private-note reveal dialog continues
+to use its own `FLAG_SECURE`. Only an app-private Boolean is persisted; Android
+backup remains disabled. Disposable synthetic instrumentation tests cover
+setting defaults, opt in/out, and removal without contact-provider access.
+Physical screenshot, casting and TalkBack behavior are separate release gates.

@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.MonthDay
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.PriorityQueue
 
 /** Pure local-only recurrence list. This does not schedule notifications or read calendars. */
 data class UpcomingDate(
@@ -67,26 +68,43 @@ object UpcomingDates {
         require(horizonDays in 1..366 && maxResults in 1..50) {
             "Invalid upcoming-date view bounds"
         }
-        val events = mutableListOf<UpcomingDate>()
+        val ordering = compareBy<UpcomingDate> { it.nextDate }
+            .thenBy { it.contactName.lowercase(Locale.ROOT) }
+            .thenBy { it.contactId }
+        // A worst-first heap retains at most maxResults candidates rather than
+        // allocating and sorting every event in a 10,000-contact snapshot.
+        // The old full-list sort was stable on equal date/name/contact ID.
+        // Preserve source arrival order in those rare ties, without allocating
+        // the full event list or changing the public result shape.
+        data class Ranked(val date: UpcomingDate, val arrival: Long)
+        val stable = Comparator<Ranked> { left, right ->
+            val rank = ordering.compare(left.date, right.date)
+            if (rank != 0) rank else left.arrival.compareTo(right.arrival)
+        }
+        val top = PriorityQueue<Ranked>(maxResults + 1, stable.reversed())
+        var arrival = 0L
         contacts.forEach { contact ->
-            contact.importantDates.forEach { event ->
+            contact.importantDates.forEach eventLoop@{ event ->
                 // Arbitrary custom dates may be one-time events: do not invent recurrence.
-                if (event.label != "Birthday" && event.label != "Anniversary") return@forEach
-                val monthDay = monthDay(event.value) ?: return@forEach
-                val next = nextOccurrence(monthDay, today) ?: return@forEach
+                if (event.label != "Birthday" && event.label != "Anniversary")
+                    return@eventLoop
+                val monthDay = monthDay(event.value) ?: return@eventLoop
+                val next = nextOccurrence(monthDay, today) ?: return@eventLoop
                 val remaining = ChronoUnit.DAYS.between(today, next)
                 if (remaining in 0..horizonDays.toLong()) {
-                    events.add(UpcomingDate(
+                    val candidate = UpcomingDate(
                         contactId = contact.id, contactName = contact.name,
                         kind = event.label, nextDate = next, daysUntil = remaining
-                    ))
+                    )
+                    val ranked = Ranked(candidate, arrival++)
+                    if (top.size < maxResults) top.add(ranked)
+                    else if (stable.compare(ranked, top.peek()) < 0) {
+                        top.poll()
+                        top.add(ranked)
+                    }
                 }
             }
         }
-        return events.sortedWith(
-            compareBy<UpcomingDate> { it.nextDate }
-                .thenBy { it.contactName.lowercase(Locale.ROOT) }
-                .thenBy { it.contactId }
-        ).take(maxResults)
+        return top.toList().sortedWith(stable).map { it.date }
     }
 }

@@ -24,7 +24,7 @@ object DirectoryControls {
     private fun favoriteKey(contact: ContactEntry) =
         contact.lookupKey.ifBlank { "id:" + contact.id }
 
-    /** Search accent-insensitive names and punctuated telephone numbers. */
+    /** Search visible fields only; private note text is reveal-gated, not indexed. */
     fun matches(contact: ContactEntry, search: String): Boolean {
         val words = fold(search.trim()).split(whitespace).filter { it.isNotEmpty() }
         if (words.isEmpty()) return true
@@ -36,7 +36,6 @@ object DirectoryControls {
             contact.importantDates.forEach {
                 append(' ').append(it.label).append(' ').append(it.value)
             }
-            contact.notes.forEach { append(' ').append(it) }
         })
         val phoneDigits = contact.phones.map { number ->
             number.filter { it.isDigit() }
