@@ -30,6 +30,17 @@ adb_target shell pm path "$package" | grep -q '^package:' || {
   exit 1
 }
 
+# A PNG header alone cannot prove the Clock UI was visible. Historical
+# screenshots captured an Android "Pixel Launcher isn't responding" dialog
+# over the entire app while CI incorrectly reported screenshot success.
+# Require Clock to own the focused window before AND after the capture.
+# Never tap "Wait", dismiss system dialogs, or alter a user's physical device.
+clock_has_focus() {
+  local focused
+  focused="$(adb_target shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 'mCurrentFocus=' || true)"
+  [[ "$focused" == *"$package/"* ]]
+}
+
 capture() {
   local label="$1"
   local launch
@@ -39,7 +50,21 @@ capture() {
     return 1
   fi
   sleep 3
+  local attempt
+  for attempt in 1 2 3; do
+    if clock_has_focus; then break; fi
+    sleep 2
+  done
+  if ! clock_has_focus; then
+    printf 'Clock screenshot blocked for %s: a different window or Android dialog has focus\n' "$label" >&2
+    return 1
+  fi
   adb_target exec-out screencap -p > "$out/$label.png"
+  if ! clock_has_focus; then
+    rm -f "$out/$label.png"
+    printf 'Clock screenshot invalid for %s: focus changed during capture\n' "$label" >&2
+    return 1
+  fi
 }
 
 # The emulator is ephemeral: these display settings cannot affect owner devices.
