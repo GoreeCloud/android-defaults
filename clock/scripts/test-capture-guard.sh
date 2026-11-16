@@ -74,3 +74,43 @@ if grep -Fq 'exec-out screencap' "$tmp/blocked-calls"; then
 fi
 test ! -e "$tmp/disposable/clock/build/reports/emulator-screenshots/phone-light.png"
 echo 'PASS: ANR/system dialog is rejected before screenshot capture'
+
+# A specific Pixel Launcher ANR may be recovered exactly once *only* on the
+# disposable emulator. If focus still cannot be verified, fail without taking
+# any screenshot. Never tap dialogs or restart unrelated app packages.
+cat > "$tmp/adb" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CAPTURE_QA_TRACE"
+case "$*" in
+  "-s emulator-5554 get-state")
+    printf 'device\n' ;;
+  "-s emulator-5554 shell getprop ro.kernel.qemu")
+    printf '1\n' ;;
+  "-s emulator-5554 shell pm path com.goreecloud.clock")
+    printf 'package:/data/app/synthetic/base.apk\n' ;;
+  "-s emulator-5554 shell pm path com.google.android.apps.nexuslauncher")
+    printf 'package:/system/launcher/base.apk\n' ;;
+  "-s emulator-5554 shell dumpsys window")
+    printf 'mCurrentFocus=Window{123 u0 com.android.systemui/ANR}\n' ;;
+  "-s emulator-5554 shell cat /sdcard/clock-window.xml")
+    printf '<hierarchy><node text="Pixel Launcher isn\x27t responding" bounds="[0,0][200,200]" /></hierarchy>\n' ;;
+  *"exec-out screencap -p"*)
+    echo 'A blocked ANR overlay was captured' >&2
+    exit 75 ;;
+  *)
+    exit 0 ;;
+esac
+SH
+chmod +x "$tmp/adb"
+export CAPTURE_QA_TRACE="$tmp/launcher-anr-calls"
+if (cd "$tmp/disposable" && PATH="$tmp:$PATH" bash "$script") > "$tmp/launcher-anr-output" 2>&1; then
+  echo 'Clock screenshot QA proceeded with unresolved launcher ANR' >&2
+  exit 1
+fi
+grep -Fq 'Observed disposable emulator Pixel Launcher ANR' "$tmp/launcher-anr-output"
+test "$(grep -Fc 'am force-stop com.google.android.apps.nexuslauncher' "$tmp/launcher-anr-calls")" -eq 1
+if grep -E ' input tap |exec-out screencap' "$tmp/launcher-anr-calls"; then
+  echo 'Clock attempted arbitrary dialog click or capture while overlay remained' >&2
+  exit 1
+fi
+echo 'PASS: only confirmed disposable launcher ANR is restarted once; unresolved overlay blocks capture'
