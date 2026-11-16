@@ -172,10 +172,13 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmEngine.isAlarmAction(intent.action) -> {
                 val id = AlarmEngine.alarmId(intent)
                 val alarm = ClockStore.alarms(context).firstOrNull { it.id == id && it.enabled } ?: return
-                if (alarm.repeatDays == 0) ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
-                else if (!AlarmEngine.scheduleAlarm(context, alarm)) {
-                    // Avoid displaying an enabled repeating alarm with no next occurrence.
+                if (alarm.repeatDays == 0) {
                     ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
+                } else {
+                    // A temporary permission or scheduling failure must never erase the
+                    // user's recurring-alarm preference. Reconcile when access returns;
+                    // the Alarms screen warns when reliable alerts are unavailable.
+                    AlarmEngine.scheduleAlarm(context, alarm)
                 }
                 AlarmEngine.notifyAlert(context, "Alarm", "It's time.", "alarm-$id")
             }
@@ -207,7 +210,11 @@ class RescheduleReceiver : BroadcastReceiver() {
             AlarmEngine.scheduleAlarm(context, it)
         }
         val deadline = ClockStore.timerDeadline(context)
-        if (deadline > System.currentTimeMillis()) AlarmEngine.scheduleTimer(context, deadline)
-        else if (deadline != 0L) ClockStore.setTimer(context, 0L, 0L)
+        if (deadline > System.currentTimeMillis()) {
+            AlarmEngine.scheduleTimer(context, deadline)
+        }
+        // Preserve an overdue deadline. The foreground recovery path consumes it
+        // and tells the user that a notification might have been missed; clearing
+        // it here would silently erase that evidence after reboot/time changes.
     }
 }
