@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.goreecloud.clock.alarms.AlarmEngine
 import com.goreecloud.clock.alarms.AlarmReceiver
 import com.goreecloud.clock.alarms.ClockMath
 import com.goreecloud.clock.alarms.RescheduleReceiver
@@ -160,6 +161,54 @@ class ClockRuntimeSmokeTest {
             ClockStore.removeAlarm(context, id)
             if (oldWarning) ClockStore.recordUndeliveredAlarm(context)
             else ClockStore.acknowledgeUndeliveredAlarm(context)
+        }
+    }
+
+    @Test fun overdueOneShotOnSyntheticBootIsDisabledWithLocalWarning() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existing = ClockStore.alarms(context)
+        val id = ClockMath.uniqueAlarmId(System.currentTimeMillis(), existing.map { it.id })
+        val oldWarning = ClockStore.hasMissedOneShot(context)
+        val oldStopwatchStart = ClockStore.stopwatchStart(context)
+        val oldStopwatchAccumulated = ClockStore.stopwatchAccumulated(context)
+        try {
+            ClockStore.acknowledgeMissedOneShot(context)
+            ClockStore.upsertAlarm(context, ClockAlarm(id, 6, 30, enabled = true))
+            val due = System.currentTimeMillis() - 120_000L
+            assertTrue(ClockStore.recordOneShotDue(context, id, due))
+
+            // A synthetic action on a disposable emulator, not a device reboot.
+            RescheduleReceiver().onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+            assertFalse(ClockStore.alarms(context).first { it.id == id }.enabled)
+            assertEquals(0L, ClockStore.oneShotDue(context, id))
+            assertTrue(ClockStore.hasMissedOneShot(context))
+
+            ClockStore.acknowledgeMissedOneShot(context)
+            assertFalse(ClockStore.hasMissedOneShot(context))
+        } finally {
+            ClockStore.removeAlarm(context, id)
+            ClockStore.setStopwatch(context, oldStopwatchAccumulated, oldStopwatchStart)
+            if (oldWarning) ClockStore.recordMissedOneShot(context)
+            else ClockStore.acknowledgeMissedOneShot(context)
+        }
+    }
+
+    @Test fun legacyOneShotWithoutStoredDueIsNotDeclaredMissed() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existing = ClockStore.alarms(context)
+        val id = ClockMath.uniqueAlarmId(System.currentTimeMillis(), existing.map { it.id })
+        val oldWarning = ClockStore.hasMissedOneShot(context)
+        try {
+            ClockStore.acknowledgeMissedOneShot(context)
+            ClockStore.upsertAlarm(context, ClockAlarm(id, 6, 30, enabled = true))
+            assertEquals(0L, ClockStore.oneShotDue(context, id))
+            AlarmEngine.reconcileMissedOneShots(context, System.currentTimeMillis())
+            assertTrue(ClockStore.alarms(context).first { it.id == id }.enabled)
+            assertFalse(ClockStore.hasMissedOneShot(context))
+        } finally {
+            ClockStore.removeAlarm(context, id)
+            if (oldWarning) ClockStore.recordMissedOneShot(context)
+            else ClockStore.acknowledgeMissedOneShot(context)
         }
     }
 
