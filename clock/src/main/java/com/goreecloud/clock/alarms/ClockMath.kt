@@ -20,6 +20,21 @@ object ClockMath {
     fun shouldRescheduleOneShot(originalDue: Long, now: Long): Boolean =
         originalDue <= 0L || originalDue > now
 
+    /**
+     * The UI must display a persisted one-shot's actual due instant, not a
+     * newly computed occurrence tomorrow. A due/overdue one-shot is excluded
+     * from future upcoming-alarm summaries until its receiver or recovery runs.
+     * Legacy records without due metadata keep their existing fallback.
+     */
+    fun nextDisplayedAlarmAt(
+        now: Long, hour: Int, minute: Int, repeatDays: Int, persistedDue: Long,
+        zone: TimeZone = TimeZone.getDefault(),
+    ): Long? = when {
+        repeatDays != 0 -> nextAlarmAt(now, hour, minute, repeatDays, zone)
+        persistedDue > 0L -> persistedDue.takeIf { it > now }
+        else -> nextAlarmAt(now, hour, minute, 0, zone)
+    }
+
     /** Full 64-bit identity; requestCode (Int) and Intent extras alone can collide. */
     fun alarmRequestData(id: Long): String = "goreecloud-clock://alarm/$id"
 
