@@ -17,6 +17,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.goreecloud.clock.alarms.AlarmReceiver
 import com.goreecloud.clock.alarms.ClockMath
 import com.goreecloud.clock.alarms.RescheduleReceiver
+import com.goreecloud.clock.data.ClockStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -60,6 +61,22 @@ class ClockRuntimeSmokeTest {
         } finally {
             first.cancel()
             second.cancel()
+        }
+    }
+
+    @Test fun overdueTimerSurvivesBootForForegroundRecoveryNotice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val oldDeadline = ClockStore.timerDeadline(context)
+        val oldRemaining = ClockStore.timerRemaining(context)
+        try {
+            val expired = System.currentTimeMillis() - 60_000L
+            ClockStore.setTimer(context, expired, 0L)
+            // Simulate the receiver using only synthetic app-local timer state.
+            // A real device boot and audible alert still require physical QA.
+            RescheduleReceiver().onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+            assertEquals(expired, ClockStore.timerDeadline(context))
+        } finally {
+            ClockStore.setTimer(context, oldDeadline, oldRemaining)
         }
     }
 
