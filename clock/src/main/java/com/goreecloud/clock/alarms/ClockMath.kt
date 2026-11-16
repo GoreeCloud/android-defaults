@@ -16,6 +16,10 @@ object ClockMath {
     fun oneShotOverdue(originalDue: Long, now: Long): Boolean =
         originalDue > 0L && now >= originalDue && now - originalDue >= 60_000L
 
+    /** A one-shot already past due must not be rolled into tomorrow during grace. */
+    fun shouldRescheduleOneShot(originalDue: Long, now: Long): Boolean =
+        originalDue <= 0L || originalDue > now
+
     /** Full 64-bit identity; requestCode (Int) and Intent extras alone can collide. */
     fun alarmRequestData(id: Long): String = "goreecloud-clock://alarm/$id"
 
