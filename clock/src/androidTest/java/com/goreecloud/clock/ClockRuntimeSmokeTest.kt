@@ -80,6 +80,40 @@ class ClockRuntimeSmokeTest {
         }
     }
 
+    @Test fun deniedTimerNotificationRetainsDueTimerUntilAcknowledged() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val previousDeadline = ClockStore.timerDeadline(context)
+        val previousRemaining = ClockStore.timerRemaining(context)
+        val receiver = AlarmReceiver()
+        try {
+            val expired = System.currentTimeMillis() - 60_000L
+            ClockStore.setTimer(context, expired, 0L)
+            var attempts = 0
+            receiver.completeTimerWithAlert(context, expired - 2_000L) {
+                attempts++
+                true
+            }
+            assertEquals(0, attempts)
+            assertEquals(expired, ClockStore.timerDeadline(context))
+
+            receiver.completeTimerWithAlert(context, System.currentTimeMillis()) {
+                attempts++
+                false // Simulated Android permission/channel denial.
+            }
+            assertEquals(1, attempts)
+            assertEquals(expired, ClockStore.timerDeadline(context))
+
+            receiver.completeTimerWithAlert(context, System.currentTimeMillis()) {
+                attempts++
+                true // Simulated accepted notification post.
+            }
+            assertEquals(2, attempts)
+            assertEquals(0L, ClockStore.timerDeadline(context))
+        } finally {
+            ClockStore.setTimer(context, previousDeadline, previousRemaining)
+        }
+    }
+
     @Test fun installedAppHasNoInternetOrExportedReceivers() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val pm = context.packageManager
