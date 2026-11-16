@@ -143,9 +143,17 @@ class DialerActivity : Activity() {
         if (intent?.getBooleanExtra(EXTRA_CALL_SCREEN, false) == true) {
             screen = "call"
             openDtmfOnNextRender = intent.getBooleanExtra(EXTRA_DTMF, false)
-        } else if (intent?.action == Intent.ACTION_DIAL && intent.data?.scheme == "tel") {
-            enteredNumber = intent.data?.schemeSpecificPart.orEmpty()
-            screen = "keypad"
+        } else {
+            // ACTION_DIAL is exported; a caller can supply URI fragments,
+            // controls, or an overlong input. Never put unvalidated external
+            // data into the keypad, Activity state, or contact matching.
+            val externalNumber = ExternalDialIntentPolicy.normalizedNumber(
+                intent?.action, intent?.data?.scheme, intent?.data?.schemeSpecificPart,
+            )
+            if (externalNumber != null) {
+                enteredNumber = externalNumber
+                screen = "keypad"
+            }
         }
     }
 
