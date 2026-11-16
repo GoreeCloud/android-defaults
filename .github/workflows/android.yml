@@ -171,8 +171,9 @@ jobs:
             exit 1
           fi
           if ! grep -Eq '^Signer #1 certificate SHA-256 digest: [0-9a-fA-F]{64}$' <<< "$signature"; then
-            echo "APK signing certificate SHA-256 metadata missing or malformed." >&2
-            grep -E '^(Signer|Verified)' <<< "$signature" >&2 || true
+            echo "APK signing certificate SHA-256 metadata missing or malformed; exact SDK verification metadata follows." >&2
+            # Nonsecret debug-certificate metadata from a disposable CI runner.
+            printf '%s\n' "$signature" >&2
             exit 1
           fi
           if grep -Eq '^Signer #2 certificate' <<< "$signature"; then
