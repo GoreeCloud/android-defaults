@@ -136,21 +136,24 @@ private enum class ClockTab(val label: String, val icon: ImageVector) {
     SETTINGS("Settings", Icons.Outlined.Settings),
 }
 
+// Exact snapshot of GoreeCloud UI's provisional semantic + Iris accent roles,
+// verified against gc-ui/tokens/gc.tokens.json at blob 5216a342cfe57e696e36490d2fe012c571f189bb.
+// Keep this mapping explicit until a tested native GC UI adapter is available.
 private val gcLight = lightColorScheme(
-    primary = Color(0xFF5145D9), onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8E6FF), onPrimaryContainer = Color(0xFF2C227C),
-    background = Color(0xFFECF0F8), onBackground = Color(0xFF20243A),
-    surface = Color(0xFFF9FAFD), onSurface = Color(0xFF20243A),
-    surfaceVariant = Color(0xFFE5EBF6), onSurfaceVariant = Color(0xFF5F657B),
-    outline = Color(0xFF8990A7),
+    primary = Color(0xFF5146C8), onPrimary = Color.White,
+    primaryContainer = Color(0xFFE8E5FF), onPrimaryContainer = Color(0xFF30266F),
+    background = Color(0xFFF6F7FB), onBackground = Color(0xFF1B2030),
+    surface = Color(0xFFFFFFFF), onSurface = Color(0xFF1B2030),
+    surfaceVariant = Color(0xFFEEF0F7), onSurfaceVariant = Color(0xFF505B70),
+    outline = Color(0xFF68758C),
 )
 private val gcDark = darkColorScheme(
-    primary = Color(0xFFC5BFFF), onPrimary = Color(0xFF241B66),
-    primaryContainer = Color(0xFF39316B), onPrimaryContainer = Color(0xFFEBE8FF),
-    background = Color(0xFF10131E), onBackground = Color(0xFFF2F2FA),
-    surface = Color(0xFF1D2231), onSurface = Color(0xFFF2F2FA),
-    surfaceVariant = Color(0xFF292F40), onSurfaceVariant = Color(0xFFB3B9CF),
-    outline = Color(0xFF747C99),
+    primary = Color(0xFFBFB8FF), onPrimary = Color(0xFF272057),
+    primaryContainer = Color(0xFF413974), onPrimaryContainer = Color(0xFFE8E5FF),
+    background = Color(0xFF0D121D), onBackground = Color(0xFFF2F4FB),
+    surface = Color(0xFF171D2A), onSurface = Color(0xFFF2F4FB),
+    surfaceVariant = Color(0xFF252D3D), onSurfaceVariant = Color(0xFFCED5E5),
+    outline = Color(0xFF9CA8BC),
 )
 
 @Composable
@@ -237,8 +240,8 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
             controller.isAppearanceLightStatusBars = !dark
             controller.isAppearanceLightNavigationBars = !dark
             if (Build.VERSION.SDK_INT < 35) {
-                val color = if (dark) android.graphics.Color.rgb(16, 19, 30)
-                    else android.graphics.Color.rgb(236, 240, 248)
+                val color = if (dark) android.graphics.Color.rgb(13, 18, 29)
+                    else android.graphics.Color.rgb(246, 247, 251)
                 window.statusBarColor = color
                 window.navigationBarColor = color
             }
