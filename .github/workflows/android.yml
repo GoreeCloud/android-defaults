@@ -154,17 +154,34 @@ jobs:
           apk="clock/build/outputs/apk/debug/clock-debug.apk"
           test -s "$apk"
           sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          test -n "$sdk"
-          apksigner="$(find "$sdk/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "$apksigner"
-          signature="$("$apksigner" verify --verbose --print-certs "$apk")"
-          grep -Eq '^Signer #1 certificate SHA-256 digest: [0-9a-fA-F]{64}$' <<< "$signature"
+          if [[ -z "$sdk" || ! -d "$sdk/build-tools" ]]; then
+            echo "Android SDK build-tools directory not available for APK signer verification." >&2
+            exit 1
+          fi
+          # SDK tools may be symlinks on hosted runners. No external downloads.
+          apksigner="$(find "$sdk/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          if [[ -z "$apksigner" || ! -x "$apksigner" ]]; then
+            echo "Executable apksigner missing from installed SDK build-tools." >&2
+            exit 1
+          fi
+          echo "Using Android SDK build-tools $(basename "$(dirname "$apksigner")") for debug-only signature verification."
+          if ! signature="$("$apksigner" verify --verbose --print-certs "$apk" 2>&1)"; then
+            echo "APK signature verification failed; not uploading a debug artifact." >&2
+            printf '%s\n' "$signature" >&2
+            exit 1
+          fi
+          if ! grep -Eq '^Signer #1 certificate SHA-256 digest: [0-9a-fA-F]{64}$' <<< "$signature"; then
+            echo "APK signing certificate SHA-256 metadata missing or malformed." >&2
+            grep -E '^(Signer|Verified)' <<< "$signature" >&2 || true
+            exit 1
+          fi
           if grep -Eq '^Signer #2 certificate' <<< "$signature"; then
             echo "Unexpected multiple Clock APK signers." >&2
             exit 1
           fi
           if ! grep -Eq '^Signer #1 certificate DN: .*CN=Android Debug' <<< "$signature"; then
-            echo "Unexpected Clock debug signing certificate." >&2
+            echo "Unexpected debug signing certificate identity." >&2
+            grep -E '^Signer #1 certificate DN:' <<< "$signature" >&2 || true
             exit 1
           fi
           printf 'DEBUG-only APK. No release-signing identity approved.\n'
