@@ -23,6 +23,23 @@ class ClockMathTest {
         assertEquals(true, ClockMath.timerElapsed(100L, 101L))
     }
 
+    @Test fun oneShotRecoveryRequiresPersistedDueAndGraceWindow() {
+        val due = 1_000_000L
+        assertEquals(false, ClockMath.oneShotOverdue(0L, due + 120_000L))
+        assertEquals(false, ClockMath.oneShotOverdue(-100L, due + 120_000L))
+        assertEquals(false, ClockMath.oneShotOverdue(due, due - 1000L))
+        assertEquals(false, ClockMath.oneShotOverdue(due, due))
+        assertEquals(false, ClockMath.oneShotOverdue(due, due + 59_999L))
+        assertEquals(true, ClockMath.oneShotOverdue(due, due + 60_000L))
+        assertEquals(true, ClockMath.oneShotOverdue(due, due + 120_000L))
+        // A just-due alarm remains pending during grace; never silently roll it.
+        assertEquals(false, ClockMath.shouldRescheduleOneShot(due, due))
+        assertEquals(false, ClockMath.shouldRescheduleOneShot(due, due + 30_000L))
+        assertEquals(false, ClockMath.shouldRescheduleOneShot(due, due + 120_000L))
+        assertEquals(true, ClockMath.shouldRescheduleOneShot(due, due - 1L))
+        assertEquals(true, ClockMath.shouldRescheduleOneShot(0L, due + 120_000L))
+    }
+
     @Test fun alarmIdentityDistinguishesCollidingLongHashCodes() {
         // Java Long.hashCode() returns 1 for both of these distinct IDs.
         val first = 1L

@@ -9,6 +9,17 @@ object ClockMath {
     fun timerElapsed(deadline: Long, now: Long): Boolean =
         deadline > 0L && now >= deadline
 
+    /**
+     * Detect only previously scheduled one-shots that are at least one minute past due.
+     * Missing legacy due times cannot prove a missed alarm; do not misclassify them.
+     */
+    fun oneShotOverdue(originalDue: Long, now: Long): Boolean =
+        originalDue > 0L && now >= originalDue && now - originalDue >= 60_000L
+
+    /** A one-shot already past due must not be rolled into tomorrow during grace. */
+    fun shouldRescheduleOneShot(originalDue: Long, now: Long): Boolean =
+        originalDue <= 0L || originalDue > now
+
     /** Full 64-bit identity; requestCode (Int) and Intent extras alone can collide. */
     fun alarmRequestData(id: Long): String = "goreecloud-clock://alarm/$id"
 

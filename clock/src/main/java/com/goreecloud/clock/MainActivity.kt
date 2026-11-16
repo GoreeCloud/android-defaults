@@ -171,6 +171,7 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     var laps by remember { mutableStateOf(emptyList<Long>()) }
     var notice by remember { mutableStateOf<String?>(null) }
     var undeliveredAlarmWarning by remember { mutableStateOf(ClockStore.hasUndeliveredAlarm(context)) }
+    var missedOneShotWarning by remember { mutableStateOf(ClockStore.hasMissedOneShot(context)) }
     var editingRepeat by remember { mutableStateOf<ClockAlarm?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var elapsedNow by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -195,13 +196,29 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     }
     LaunchedEffect(activityStarted, now / 1000L) {
         // Pick up denied alert posts even if Clock was already open.
-        if (activityStarted && !undeliveredAlarmWarning) {
-            undeliveredAlarmWarning = ClockStore.hasUndeliveredAlarm(context)
+        if (activityStarted) {
+            // Recheck a due one-shot after grace even if the Activity never stops.
+            // Do not run full scheduling again, and never roll its due into tomorrow.
+            val overdueOnScreen = alarms.any { alarm ->
+                alarm.enabled && alarm.repeatDays == 0 &&
+                    ClockMath.oneShotOverdue(ClockStore.oneShotDue(context, alarm.id), now)
+            }
+            if (overdueOnScreen) {
+                AlarmEngine.reconcileMissedOneShots(context, now)
+                alarms = ClockStore.alarms(context)
+            }
+            if (!undeliveredAlarmWarning) {
+                undeliveredAlarmWarning = ClockStore.hasUndeliveredAlarm(context)
+            }
+            if (!missedOneShotWarning) {
+                missedOneShotWarning = ClockStore.hasMissedOneShot(context)
+            }
         }
     }
     LaunchedEffect(refreshToken) {
         alarms = ClockStore.alarms(context)
         undeliveredAlarmWarning = ClockStore.hasUndeliveredAlarm(context)
+        missedOneShotWarning = ClockStore.hasMissedOneShot(context)
         notificationsReady = AlarmEngine.notificationsAllowed(context)
         exactReady = AlarmEngine.exactAllowed(context)
         val storedDeadline = ClockStore.timerDeadline(context)
@@ -306,6 +323,25 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                                 ClockStore.acknowledgeUndeliveredAlarm(context)
                                 undeliveredAlarmWarning = false
                             }) { Text("Dismiss alarm warning") }
+                        }
+                    }
+                }
+                if (missedOneShotWarning) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp), color = scheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "A one-time alarm passed its scheduled time and may have been missed. It was turned off; set it again if needed.",
+                                color = scheme.onPrimaryContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            OutlinedButton(onClick = {
+                                ClockStore.acknowledgeMissedOneShot(context)
+                                missedOneShotWarning = false
+                            }) { Text("Dismiss missed alarm warning") }
                         }
                     }
                 }

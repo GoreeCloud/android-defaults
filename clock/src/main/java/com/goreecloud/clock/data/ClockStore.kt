@@ -21,6 +21,8 @@ object ClockStore {
     private const val STOPWATCH_ACCUMULATED = "stopwatch_accumulated"
     private const val STOPWATCH_START = "stopwatch_start"
     private const val UNDELIVERED_ALARM = "undelivered_alarm_notice"
+    private const val MISSED_ONE_SHOT = "missed_one_shot_notice"
+    private const val ONE_SHOT_DUE_PREFIX = "one_shot_due_"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -63,6 +65,7 @@ object ClockStore {
     }
 
     fun removeAlarm(context: Context, id: Long) {
+        clearOneShotDue(context, id)
         writeAlarms(context, alarms(context).filterNot { it.id == id })
     }
 
@@ -83,6 +86,33 @@ object ClockStore {
 
     fun acknowledgeUndeliveredAlarm(context: Context) {
         prefs(context).edit().remove(UNDELIVERED_ALARM).apply()
+    }
+
+    /**
+     * Keep the original due instant outside the alarm record so the existing
+     * edit/upsert path cannot accidentally replace it with an outdated snapshot.
+     * A missing key means a pre-migration alarm; never assume it was missed.
+     */
+    fun oneShotDue(context: Context, id: Long): Long =
+        prefs(context).getLong(ONE_SHOT_DUE_PREFIX + id, 0L).coerceAtLeast(0L)
+
+    fun recordOneShotDue(context: Context, id: Long, whenMillis: Long): Boolean =
+        whenMillis > 0L && prefs(context).edit()
+            .putLong(ONE_SHOT_DUE_PREFIX + id, whenMillis).commit()
+
+    fun clearOneShotDue(context: Context, id: Long) {
+        prefs(context).edit().remove(ONE_SHOT_DUE_PREFIX + id).apply()
+    }
+
+    fun hasMissedOneShot(context: Context): Boolean =
+        prefs(context).getBoolean(MISSED_ONE_SHOT, false)
+
+    /** Persist before clearing an overdue alarm so its possible miss is visible. */
+    fun recordMissedOneShot(context: Context): Boolean =
+        prefs(context).edit().putBoolean(MISSED_ONE_SHOT, true).commit()
+
+    fun acknowledgeMissedOneShot(context: Context) {
+        prefs(context).edit().remove(MISSED_ONE_SHOT).apply()
     }
 
     fun theme(context: Context): String = prefs(context).getString(THEME, "system") ?: "system"
