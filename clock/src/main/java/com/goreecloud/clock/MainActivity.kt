@@ -170,6 +170,7 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     var stopwatchStart by remember { mutableLongStateOf(ClockStore.stopwatchStart(context)) }
     var laps by remember { mutableStateOf(emptyList<Long>()) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var undeliveredAlarmWarning by remember { mutableStateOf(ClockStore.hasUndeliveredAlarm(context)) }
     var editingRepeat by remember { mutableStateOf<ClockAlarm?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var elapsedNow by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -192,8 +193,15 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
             pausedRemaining = 0L
         }
     }
+    LaunchedEffect(activityStarted, now / 1000L) {
+        // Pick up denied alert posts even if Clock was already open.
+        if (activityStarted && !undeliveredAlarmWarning) {
+            undeliveredAlarmWarning = ClockStore.hasUndeliveredAlarm(context)
+        }
+    }
     LaunchedEffect(refreshToken) {
         alarms = ClockStore.alarms(context)
+        undeliveredAlarmWarning = ClockStore.hasUndeliveredAlarm(context)
         notificationsReady = AlarmEngine.notificationsAllowed(context)
         exactReady = AlarmEngine.exactAllowed(context)
         val storedDeadline = ClockStore.timerDeadline(context)
@@ -280,6 +288,25 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                     Surface(shape = CircleShape, color = scheme.primaryContainer) {
                         Icon(Icons.Outlined.Alarm, "Clock", Modifier.padding(15.dp).size(27.dp),
                             tint = scheme.onPrimaryContainer)
+                    }
+                }
+                if (undeliveredAlarmWarning) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp), color = scheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "An alarm fired, but Android rejected its notification. Review alert settings before relying on Clock.",
+                                color = scheme.onPrimaryContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            OutlinedButton(onClick = {
+                                ClockStore.acknowledgeUndeliveredAlarm(context)
+                                undeliveredAlarmWarning = false
+                            }) { Text("Dismiss alarm warning") }
+                        }
                     }
                 }
                 if (notice != null) {
