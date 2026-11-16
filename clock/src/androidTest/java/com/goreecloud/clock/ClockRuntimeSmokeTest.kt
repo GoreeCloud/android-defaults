@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -39,6 +41,15 @@ class ClockRuntimeSmokeTest {
         compose.onNodeWithText("No laps yet").assertExists()
         compose.onNode(hasText("Settings") and hasClickAction()).performClick()
         compose.onNodeWithText("Appearance").assertExists()
+    }
+
+    @Test fun settingsAboutPrivacyNoteRemainsReachableByScrolling() {
+        compose.onNode(hasText("Settings") and hasClickAction()).performClick()
+        // About can start below the floating dock on phone layouts.
+        // Verify scroll semantics can bring the privacy explanation onscreen.
+        compose.onNodeWithText("Private by design. Stored locally on this device.")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test fun distinct64BitAlarmIdsNeverAliasInAndroidPendingIntentIdentity() {
