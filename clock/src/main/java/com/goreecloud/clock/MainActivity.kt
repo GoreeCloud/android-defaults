@@ -197,6 +197,16 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
     LaunchedEffect(activityStarted, now / 1000L) {
         // Pick up denied alert posts even if Clock was already open.
         if (activityStarted) {
+            // Recheck a due one-shot after grace even if the Activity never stops.
+            // Do not run full scheduling again, and never roll its due into tomorrow.
+            val overdueOnScreen = alarms.any { alarm ->
+                alarm.enabled && alarm.repeatDays == 0 &&
+                    ClockMath.oneShotOverdue(ClockStore.oneShotDue(context, alarm.id), now)
+            }
+            if (overdueOnScreen) {
+                AlarmEngine.reconcileMissedOneShots(context, now)
+                alarms = ClockStore.alarms(context)
+            }
             if (!undeliveredAlarmWarning) {
                 undeliveredAlarmWarning = ClockStore.hasUndeliveredAlarm(context)
             }
