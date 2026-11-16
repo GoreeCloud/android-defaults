@@ -71,10 +71,14 @@ object ClockStore {
 
     fun timerDeadline(context: Context): Long = prefs(context).getLong(TIMER_DEADLINE, 0L)
     fun timerRemaining(context: Context): Long = prefs(context).getLong(TIMER_REMAINING, 0L).coerceAtLeast(0L)
-    fun setTimer(context: Context, deadline: Long, remaining: Long) {
+    /**
+     * A timer receiver runs in a separate, short-lived process lifecycle. A
+     * scheduled PendingIntent must not outlive an unwritten timer deadline.
+     * Commit both fields together and tell callers when storage refused them.
+     */
+    fun setTimer(context: Context, deadline: Long, remaining: Long): Boolean =
         prefs(context).edit().putLong(TIMER_DEADLINE, deadline.coerceAtLeast(0L))
-            .putLong(TIMER_REMAINING, remaining.coerceAtLeast(0L)).apply()
-    }
+            .putLong(TIMER_REMAINING, remaining.coerceAtLeast(0L)).commit()
 
     /** Minimal local acknowledgement flag, without alarm identifiers or times. */
     fun hasUndeliveredAlarm(context: Context): Boolean =

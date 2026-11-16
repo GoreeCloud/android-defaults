@@ -94,6 +94,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.goreecloud.clock.alarms.AlarmEngine
 import com.goreecloud.clock.alarms.ClockMath
 import com.goreecloud.clock.alarms.ClockTimeFormat
+import com.goreecloud.clock.alarms.TimerStartTransaction
 import com.goreecloud.clock.data.ClockAlarm
 import com.goreecloud.clock.data.ClockStore
 import kotlinx.coroutines.delay
@@ -402,25 +403,49 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                             val at = System.currentTimeMillis() + duration
                             if (duration <= 0L || at <= System.currentTimeMillis()) {
                                 notice = "Enter a countdown longer than zero."
-                            } else if (!AlarmEngine.scheduleTimer(context, at)) {
+                            } else if (!AlarmEngine.ready(context)) {
                                 notice = "Enable notifications and exact alarms in Settings to start a timer."
                             } else {
-                                ClockStore.setTimer(context, at, 0L)
-                                deadline = at
-                                pausedRemaining = 0L
+                                val oldDeadline = ClockStore.timerDeadline(context)
+                                val oldRemaining = ClockStore.timerRemaining(context)
+                                // The transaction enforces save-before-arm, including
+                                // the permission-race failure and rollback paths.
+                                when (TimerStartTransaction.start(
+                                    save = { ClockStore.setTimer(context, at, 0L) },
+                                    schedule = { AlarmEngine.scheduleTimer(context, at) },
+                                    restore = { ClockStore.setTimer(context, oldDeadline, oldRemaining) },
+                                )) {
+                                    TimerStartTransaction.Result.SAVE_FAILED ->
+                                        notice = "Could not save the timer. Check available device storage."
+                                    TimerStartTransaction.Result.SCHEDULE_FAILED ->
+                                        notice = "Unable to schedule the timer. Review Android alert permissions."
+                                    TimerStartTransaction.Result.RESTORE_FAILED ->
+                                        notice = "Unable to schedule the timer or restore saved timer state."
+                                    TimerStartTransaction.Result.STARTED -> {
+                                        deadline = at
+                                        pausedRemaining = 0L
+                                    }
+                                }
                             }
                         },
                         onPause = {
-                            pausedRemaining = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
-                            AlarmEngine.cancelTimer(context)
-                            deadline = 0L
-                            ClockStore.setTimer(context, 0L, pausedRemaining)
+                            val remaining = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
+                            if (ClockStore.setTimer(context, 0L, remaining)) {
+                                AlarmEngine.cancelTimer(context)
+                                pausedRemaining = remaining
+                                deadline = 0L
+                            } else {
+                                notice = "Could not save the pause. Timer remains scheduled."
+                            }
                         },
                         onReset = {
-                            AlarmEngine.cancelTimer(context)
-                            ClockStore.setTimer(context, 0L, 0L)
-                            deadline = 0L
-                            pausedRemaining = 0L
+                            if (ClockStore.setTimer(context, 0L, 0L)) {
+                                AlarmEngine.cancelTimer(context)
+                                deadline = 0L
+                                pausedRemaining = 0L
+                            } else {
+                                notice = "Could not save the reset. Timer state was not changed."
+                            }
                         },
                     )
                     ClockTab.STOPWATCH -> StopwatchPage(
