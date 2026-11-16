@@ -561,9 +561,18 @@ private fun AlarmPage(
     val use24Hour = DateFormat.is24HourFormat(context)
     val currentLocale = Locale.getDefault()
     val next = remember(alarms, now / 60000L, currentZone.id) {
-        alarms.filter { it.enabled }.map {
-            ClockMath.nextAlarmAt(now, it.hour, it.minute, it.repeatDays, currentZone)
+        alarms.filter { it.enabled }.mapNotNull { alarm ->
+            ClockMath.nextDisplayedAlarmAt(
+                now, alarm.hour, alarm.minute, alarm.repeatDays,
+                ClockStore.oneShotDue(context, alarm.id), currentZone,
+            )
         }.minOrNull()
+    }
+    val awaitingDueAlarm = remember(alarms, now / 1000L) {
+        alarms.any { alarm ->
+            alarm.enabled && alarm.repeatDays == 0 &&
+                ClockStore.oneShotDue(context, alarm.id).let { it > 0L && it <= now }
+        }
     }
     val nextTime = remember(next, currentZone.id, use24Hour, currentLocale) {
         next?.let { ClockTimeFormat.nextAlarm(it, currentZone, use24Hour, currentLocale) }
@@ -584,12 +593,16 @@ private fun AlarmPage(
             Text("NEXT ALARM", fontSize = 11.sp, letterSpacing = 2.sp,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                nextTime ?: "Nothing scheduled",
+                nextTime ?: if (awaitingDueAlarm) "Checking a due alarm" else "Nothing scheduled",
                 style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Text(if (next == null) "Add your first alarm below."
-                else "Ready when you need it.",
+            Text(
+                when {
+                    awaitingDueAlarm -> "Its scheduled time has passed. Checking whether it fired."
+                    next == null -> "Add your first alarm below."
+                    else -> "Ready when you need it."
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall)
         }

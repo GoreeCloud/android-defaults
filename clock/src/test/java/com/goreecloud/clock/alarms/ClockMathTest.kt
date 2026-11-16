@@ -40,6 +40,29 @@ class ClockMathTest {
         assertEquals(true, ClockMath.shouldRescheduleOneShot(0L, due + 120_000L))
     }
 
+    @Test fun nextAlarmSummaryUsesPersistedOneShotDueRatherThanTomorrow() {
+        val today = instant(2026, 11, 6, 7, 30)
+        val tomorrow = instant(2026, 11, 7, 7, 30)
+        assertEquals(today, ClockMath.nextDisplayedAlarmAt(
+            instant(2026, 11, 6, 6, 0), 7, 30, 0, today, zone,
+        ))
+        // An expired one-shot in the recovery grace period is NOT tomorrow's alarm.
+        assertNull(ClockMath.nextDisplayedAlarmAt(
+            instant(2026, 11, 6, 7, 30), 7, 30, 0, today, zone,
+        ))
+        assertNull(ClockMath.nextDisplayedAlarmAt(
+            instant(2026, 11, 6, 8, 0), 7, 30, 0, today, zone,
+        ))
+        // Pre-migration records without a persisted due time retain legacy behavior.
+        assertEquals(tomorrow, ClockMath.nextDisplayedAlarmAt(
+            instant(2026, 11, 6, 8, 0), 7, 30, 0, 0L, zone,
+        ))
+        // Repeat schedules ignore stale one-shot metadata.
+        assertEquals(instant(2026, 11, 9, 7, 30), ClockMath.nextDisplayedAlarmAt(
+            instant(2026, 11, 6, 8, 0), 7, 30, 1 shl 0, today, zone,
+        ))
+    }
+
     @Test fun alarmIdentityDistinguishesCollidingLongHashCodes() {
         // Java Long.hashCode() returns 1 for both of these distinct IDs.
         val first = 1L
