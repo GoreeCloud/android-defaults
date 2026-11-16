@@ -467,7 +467,10 @@ private fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit
 @Composable
 private fun SectionHeading(title: String, subtitle: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        // The root page uses a Box rather than Surface, so Text cannot rely
+        // on the default LocalContentColor (black) in dark appearance.
+        Text(title, style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         if (subtitle != null) {
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
