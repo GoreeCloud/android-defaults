@@ -143,9 +143,10 @@ object AlarmEngine {
         }
     }
 
-    fun notifyAlert(context: Context, title: String, message: String, tag: String) {
-        if (!notificationsAllowed(context)) return
+    /** True only when Android accepted the notification post, not when sound is heard. */
+    fun notifyAlert(context: Context, title: String, message: String, tag: String): Boolean {
         createNotificationChannel(context)
+        if (!notificationsAllowed(context)) return false
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_clock)
             .setContentTitle(title)
@@ -156,8 +157,10 @@ object AlarmEngine {
             .build()
         try {
             context.getSystemService(NotificationManager::class.java).notify(tag, 0, notification)
+            return true
         } catch (_: SecurityException) {
-            // Notification permission or channel access can change between check and post.
+            // Permission or channel access may change between check and post.
+            return false
         }
     }
 
@@ -183,12 +186,24 @@ class AlarmReceiver : BroadcastReceiver() {
                 AlarmEngine.notifyAlert(context, "Alarm", "It's time.", "alarm-$id")
             }
             AlarmEngine.isTimerAction(intent.action) -> {
-                val deadline = ClockStore.timerDeadline(context)
-                if (deadline <= 0L || System.currentTimeMillis() + 1500L < deadline) return
-                ClockStore.setTimer(context, 0L, 0L)
-                AlarmEngine.notifyAlert(context, "Timer complete", "Your countdown has finished.", "timer")
+                completeTimerWithAlert(context, System.currentTimeMillis()) {
+                    AlarmEngine.notifyAlert(context, "Timer complete", "Your countdown has finished.", "timer")
+                }
             }
         }
+    }
+
+    /**
+     * Preserve an expired timer if Android declined the notification.
+     * On the next foreground open, Clock can then warn about the missed alert.
+     * This is not an audibility guarantee: DND and OEM policies still apply.
+     */
+    internal fun completeTimerWithAlert(
+        context: Context, nowMillis: Long, postNotification: () -> Boolean,
+    ) {
+        val deadline = ClockStore.timerDeadline(context)
+        if (deadline <= 0L || nowMillis + 1500L < deadline) return
+        if (postNotification()) ClockStore.setTimer(context, 0L, 0L)
     }
 }
 
