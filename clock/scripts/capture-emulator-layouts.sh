@@ -63,6 +63,27 @@ tap_tab() {
   clock_has_focus
 }
 
+# Other Android Defaults previews observed the emulator-only Pixel Launcher
+# ANR obscuring a healthy app. Recover ONLY that exact system dialog once, by
+# restarting the disposable emulator launcher; never tap arbitrary dialogs.
+# A foreground mismatch without that evidence must still fail closed.
+recover_launcher_anr_once() {
+  local xml
+  xml="$(hierarchy 2>/dev/null || true)"
+  if [[ "$xml" != *"Pixel Launcher isn't responding"* ]]; then
+    return 1
+  fi
+  if ! adb_target shell pm path com.google.android.apps.nexuslauncher >/dev/null 2>&1; then
+    return 1
+  fi
+  echo "Observed disposable emulator Pixel Launcher ANR; restarting launcher once" >&2
+  adb_target shell am force-stop com.google.android.apps.nexuslauncher >/dev/null || return 1
+  sleep 2
+  adb_target shell am start -W -n "$activity" >/dev/null || return 1
+  sleep 3
+  clock_has_focus
+}
+
 capture() {
   local label="$1"
   local tab="$2"
@@ -80,7 +101,12 @@ capture() {
     sleep 2
   done
   if ! clock_has_focus; then
-    printf 'Clock screenshot blocked for %s: a different window or Android dialog has focus\n' "$label" >&2
+    recover_launcher_anr_once || true
+  fi
+  if ! clock_has_focus; then
+    local diagnostic
+    diagnostic="$(adb_target shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 'mCurrentFocus=' || true)"
+    printf 'Clock screenshot blocked for %s: focus verification failed (%s)\n' "$label" "$diagnostic" >&2
     return 1
   fi
   tap_tab "$tab" || { echo "Clock $tab tab not reachable on emulator" >&2; return 1; }
