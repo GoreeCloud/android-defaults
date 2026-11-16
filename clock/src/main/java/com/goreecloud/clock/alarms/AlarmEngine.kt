@@ -174,16 +174,9 @@ class AlarmReceiver : BroadcastReceiver() {
         when {
             AlarmEngine.isAlarmAction(intent.action) -> {
                 val id = AlarmEngine.alarmId(intent)
-                val alarm = ClockStore.alarms(context).firstOrNull { it.id == id && it.enabled } ?: return
-                if (alarm.repeatDays == 0) {
-                    ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
-                } else {
-                    // A temporary permission or scheduling failure must never erase the
-                    // user's recurring-alarm preference. Reconcile when access returns;
-                    // the Alarms screen warns when reliable alerts are unavailable.
-                    AlarmEngine.scheduleAlarm(context, alarm)
+                completeAlarmWithAlert(context, id) {
+                    AlarmEngine.notifyAlert(context, "Alarm", "It's time.", "alarm-$id")
                 }
-                AlarmEngine.notifyAlert(context, "Alarm", "It's time.", "alarm-$id")
             }
             AlarmEngine.isTimerAction(intent.action) -> {
                 completeTimerWithAlert(context, System.currentTimeMillis()) {
@@ -191,6 +184,23 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
             }
         }
+    }
+
+    /**
+     * An already-fired one-shot alarm is consumed even when Android declines the alert.
+     * Persist a local warning; a successful API post is not an audibility guarantee.
+     */
+    internal fun completeAlarmWithAlert(
+        context: Context, id: Long, postNotification: () -> Boolean,
+    ) {
+        val alarm = ClockStore.alarms(context).firstOrNull { it.id == id && it.enabled } ?: return
+        if (alarm.repeatDays == 0) {
+            ClockStore.upsertAlarm(context, alarm.copy(enabled = false))
+        } else {
+            // Keep recurring alarm intent enabled if temporary scheduling fails.
+            AlarmEngine.scheduleAlarm(context, alarm)
+        }
+        if (!postNotification()) ClockStore.recordUndeliveredAlarm(context)
     }
 
     /**
