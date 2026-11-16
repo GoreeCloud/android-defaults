@@ -20,6 +20,7 @@ object ClockStore {
     private const val THEME = "theme"
     private const val STOPWATCH_ACCUMULATED = "stopwatch_accumulated"
     private const val STOPWATCH_START = "stopwatch_start"
+    private const val UNDELIVERED_ALARM = "undelivered_alarm_notice"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -70,6 +71,18 @@ object ClockStore {
     fun setTimer(context: Context, deadline: Long, remaining: Long) {
         prefs(context).edit().putLong(TIMER_DEADLINE, deadline.coerceAtLeast(0L))
             .putLong(TIMER_REMAINING, remaining.coerceAtLeast(0L)).apply()
+    }
+
+    /** Minimal local acknowledgement flag, without alarm identifiers or times. */
+    fun hasUndeliveredAlarm(context: Context): Boolean =
+        prefs(context).getBoolean(UNDELIVERED_ALARM, false)
+
+    /** Synchronous write protects a short-lived broadcast's notice from process exit. */
+    fun recordUndeliveredAlarm(context: Context): Boolean =
+        prefs(context).edit().putBoolean(UNDELIVERED_ALARM, true).commit()
+
+    fun acknowledgeUndeliveredAlarm(context: Context) {
+        prefs(context).edit().remove(UNDELIVERED_ALARM).apply()
     }
 
     fun theme(context: Context): String = prefs(context).getString(THEME, "system") ?: "system"

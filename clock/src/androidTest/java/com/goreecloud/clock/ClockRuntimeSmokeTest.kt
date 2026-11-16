@@ -19,10 +19,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.goreecloud.clock.alarms.AlarmReceiver
 import com.goreecloud.clock.alarms.ClockMath
 import com.goreecloud.clock.alarms.RescheduleReceiver
+import com.goreecloud.clock.data.ClockAlarm
 import com.goreecloud.clock.data.ClockStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -122,6 +124,42 @@ class ClockRuntimeSmokeTest {
             assertEquals(0L, ClockStore.timerDeadline(context))
         } finally {
             ClockStore.setTimer(context, previousDeadline, previousRemaining)
+        }
+    }
+
+    @Test fun deniedOneShotAlarmPersistsWarningUntilAcknowledged() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existing = ClockStore.alarms(context)
+        val id = ClockMath.uniqueAlarmId(System.currentTimeMillis(), existing.map { it.id })
+        val oldWarning = ClockStore.hasUndeliveredAlarm(context)
+        val alarm = ClockAlarm(id, 6, 30, repeatDays = 0, enabled = true)
+        val receiver = AlarmReceiver()
+        try {
+            ClockStore.acknowledgeUndeliveredAlarm(context)
+            ClockStore.upsertAlarm(context, alarm)
+            var attempts = 0
+            receiver.completeAlarmWithAlert(context, id) {
+                attempts++
+                false // Synthetic Android refusal, no permission changes.
+            }
+            assertEquals(1, attempts)
+            assertFalse(ClockStore.alarms(context).first { it.id == id }.enabled)
+            assertTrue(ClockStore.hasUndeliveredAlarm(context))
+
+            ClockStore.acknowledgeUndeliveredAlarm(context)
+            assertFalse(ClockStore.hasUndeliveredAlarm(context))
+
+            ClockStore.upsertAlarm(context, alarm)
+            receiver.completeAlarmWithAlert(context, id) {
+                attempts++
+                true // API accepted, not an audibility guarantee.
+            }
+            assertEquals(2, attempts)
+            assertFalse(ClockStore.hasUndeliveredAlarm(context))
+        } finally {
+            ClockStore.removeAlarm(context, id)
+            if (oldWarning) ClockStore.recordUndeliveredAlarm(context)
+            else ClockStore.acknowledgeUndeliveredAlarm(context)
         }
     }
 
