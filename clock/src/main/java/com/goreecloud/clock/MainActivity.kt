@@ -402,25 +402,46 @@ private fun ClockApp(refreshToken: Int, activityStarted: Boolean) {
                             val at = System.currentTimeMillis() + duration
                             if (duration <= 0L || at <= System.currentTimeMillis()) {
                                 notice = "Enter a countdown longer than zero."
-                            } else if (!AlarmEngine.scheduleTimer(context, at)) {
+                            } else if (!AlarmEngine.ready(context)) {
                                 notice = "Enable notifications and exact alarms in Settings to start a timer."
                             } else {
-                                ClockStore.setTimer(context, at, 0L)
-                                deadline = at
-                                pausedRemaining = 0L
+                                val oldDeadline = ClockStore.timerDeadline(context)
+                                val oldRemaining = ClockStore.timerRemaining(context)
+                                // A receiver must never fire before its deadline is on disk.
+                                if (!ClockStore.setTimer(context, at, 0L)) {
+                                    notice = "Could not save the timer. Check available device storage."
+                                } else if (!AlarmEngine.scheduleTimer(context, at)) {
+                                    // Android may revoke exact-alarm access between checks.
+                                    val restored = ClockStore.setTimer(context, oldDeadline, oldRemaining)
+                                    notice = if (restored) {
+                                        "Unable to schedule the timer. Review Android alert permissions."
+                                    } else {
+                                        "Unable to schedule the timer or restore saved timer state."
+                                    }
+                                } else {
+                                    deadline = at
+                                    pausedRemaining = 0L
+                                }
                             }
                         },
                         onPause = {
-                            pausedRemaining = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
-                            AlarmEngine.cancelTimer(context)
-                            deadline = 0L
-                            ClockStore.setTimer(context, 0L, pausedRemaining)
+                            val remaining = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
+                            if (ClockStore.setTimer(context, 0L, remaining)) {
+                                AlarmEngine.cancelTimer(context)
+                                pausedRemaining = remaining
+                                deadline = 0L
+                            } else {
+                                notice = "Could not save the pause. Timer remains scheduled."
+                            }
                         },
                         onReset = {
-                            AlarmEngine.cancelTimer(context)
-                            ClockStore.setTimer(context, 0L, 0L)
-                            deadline = 0L
-                            pausedRemaining = 0L
+                            if (ClockStore.setTimer(context, 0L, 0L)) {
+                                AlarmEngine.cancelTimer(context)
+                                deadline = 0L
+                                pausedRemaining = 0L
+                            } else {
+                                notice = "Could not save the reset. Timer state was not changed."
+                            }
                         },
                     )
                     ClockTab.STOPWATCH -> StopwatchPage(
