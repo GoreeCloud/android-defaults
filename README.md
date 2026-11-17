@@ -15,3 +15,9 @@ The [Dialer source](dialer/) is a Kotlin Android application intended to request
 The [previous monorepo Contacts module](contacts/) and [its original documentation](contacts/README.md) are kept temporarily for legacy CI/other module compatibility, source provenance and rollback, **not as the owner of new Contacts development**. Do not remove it until active consumers and native acceptance are verified. The Dialer and Contacts remain independently packaged products; no installed personal contacts or device roles were migrated by the repository change.
 
 Other products, including Clock, may be developed in separate pull requests; their existence in a PR does not mean they are on this branch.
+
+## License and source boundaries
+
+The current GoreeCloud-authored source, tests and documentation committed to this repository's default branch are available under the [MIT License](LICENSE), copyright (c) 2026 GoreeCloud. The existing legacy Contacts mirror retains its source history and attribution; the separately maintained [GoreeCloud Contacts repository](https://github.com/GoreeCloud/contacts) has its own license and remains the source authority for new Contacts work.
+
+Unmerged development branches, including the proposed **GoreeCloud Clock**, are not automatically cleared for redistribution merely because this repository has a root MIT license. Review each module's ownership, contributions, third-party code and applicable notices before merging or distributing it. Android SDK/Gradle dependencies and external assets retain their independent terms. This license does not establish production/default-phone or emergency-calling acceptance.
