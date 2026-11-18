@@ -8,16 +8,16 @@ The [Dialer source](dialer/) is a Kotlin Android application intended to request
 
 **Development preview only.** The app has not yet been accepted on physical devices or approved as an emergency-calling replacement. Read the [Dialer setup and feature status](dialer/README.md) before changing your default phone app.
 
-## GoreeCloud Contacts — standalone repository
+## GoreeCloud Contacts — historical standalone-source handoff
 
-**Authoritative source:** [GoreeCloud/contacts](https://github.com/GoreeCloud/contacts), migrated through [Contacts PR #1](https://github.com/GoreeCloud/contacts/pull/1) with the 33 Contacts-specific commits preserved on its `main` branch. It remains an **Android-only development preview**, not an accepted default app or a deployed CardDAV client. The package identity `com.goreecloud.contacts` and offline-first permission model were retained.
+**Source retirement (November 18, 2026):** The former `GoreeCloud/contacts` GitHub repository was deleted by the founder as part of a 45-repository removal. The earlier Contacts migration and pull request are **historical records, not accessible current source links**. No new standalone Contacts source repository is currently designated. The old Android-only development preview was never an accepted default app or deployed CardDAV client; deletion does not change any installed application or on-device contact data.
 
-The [previous monorepo Contacts module](contacts/) and [its original documentation](contacts/README.md) are kept temporarily for legacy CI/other module compatibility, source provenance and rollback, **not as the owner of new Contacts development**. Do not remove it until active consumers and native acceptance are verified. The Dialer and Contacts remain independently packaged products; no installed personal contacts or device roles were migrated by the repository change.
+The [legacy monorepo Contacts module](contacts/) and [its original documentation](contacts/README.md) remain in this repository for CI compatibility, source provenance and possible separately reviewed recovery; **they are not an independently validated or maintained replacement**. Do not remove them without verifying active consumers, ownership and source/data preservation. Dialer and Contacts remain separately packaged concepts; no installed personal contacts or device roles were migrated by the earlier repository split.
 
 Other products, including Clock, may be developed in separate pull requests; their existence in a PR does not mean they are on this branch.
 
 ## License and source boundaries
 
-The current GoreeCloud-authored source, tests and documentation committed to this repository's default branch are available under the [MIT License](LICENSE), copyright (c) 2026 GoreeCloud. The existing legacy Contacts mirror retains its source history and attribution; the separately maintained [GoreeCloud Contacts repository](https://github.com/GoreeCloud/contacts) has its own license and remains the source authority for new Contacts work.
+The current GoreeCloud-authored source, tests and documentation on this default branch are available under the [MIT License](LICENSE), copyright (c) 2026 GoreeCloud, subject to applicable component rights. The legacy Contacts mirror retains its source history and attribution. The former standalone Contacts repository and its separate license are no longer accessible on GitHub; do not assume this root license automatically governs any separately recovered source.
 
 Unmerged development branches, including the proposed **GoreeCloud Clock**, are not automatically cleared for redistribution merely because this repository has a root MIT license. Review each module's ownership, contributions, third-party code and applicable notices before merging or distributing it. Android SDK/Gradle dependencies and external assets retain their independent terms. This license does not establish production/default-phone or emergency-calling acceptance.
