@@ -15,6 +15,7 @@ APPROVED = {
     "gradle/actions/setup-gradle": "8da46b539cd8fe6ab27ca75128919a18d757604c",
     "actions/upload-artifact": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
     "ReactiveCircus/android-emulator-runner": "a421e43855164a8197daf9d8d40fe71c6996bb0d",
+    "android-actions/setup-android": "be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd",
 }
 WORKFLOWS = ("contacts.yml", "dialer.yml", "admission.yml")
 USE_PATTERN = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)

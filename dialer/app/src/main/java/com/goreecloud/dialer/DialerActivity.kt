@@ -1,7 +1,7 @@
 package com.goreecloud.dialer
 
 import android.Manifest
-import android.app.Activity
+import androidx.activity.ComponentActivity
 import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.content.Intent
@@ -12,6 +12,7 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.animation.ValueAnimator
 import android.os.CancellationSignal
 import android.provider.Settings
 import android.provider.CallLog
@@ -34,12 +35,15 @@ import android.widget.LinearLayout
 import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import com.goreecloud.ui.material3.GoreeCloudExpressiveTheme
 
 /**
  * Native Android UI with a persistent floating bottom dock.
  * No personal information is sent outside the device by this application.
  */
-class DialerActivity : Activity() {
+class DialerActivity : ComponentActivity() {
     private lateinit var root: LinearLayout
     private var screen = "keypad"
     private var enteredNumber = ""
@@ -174,7 +178,7 @@ class DialerActivity : Activity() {
         if (::root.isInitialized) render()
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, results: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
         invalidateProviderCaches()
         render()
@@ -879,15 +883,21 @@ class DialerActivity : Activity() {
                 .setNegativeButton("Cancel", null)
                 .show()
         })
-        val privacy = column(10).apply { background = rounded(R.color.surface, 18) }
-        privacy.addView(label("Privacy and safety", 18f, R.color.text_main, true))
-        privacy.addView(label(
-            "No Internet permission, contact uploads, recording, AI screening or tracking. " +
-                "The platform controls SIM, emergency routing and call audio. " +
-                "Use a secondary test phone until real call and emergency-routing review is complete.",
-            14f, R.color.text_soft
-        ))
-        body.addView(privacy.apply { topMargin(14) })
+        // First real Compose migration slice. Keep all Phone-role/permission
+        // actions in their existing Android View handlers until dedicated
+        // emulator and physical-device acceptance establishes parity.
+        val privacyPanel = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                GoreeCloudExpressiveTheme(
+                    dynamicWallpaperColors = false,
+                    reduceMotion = !ValueAnimator.areAnimatorsEnabled()
+                ) {
+                    DialerPrivacyPanel()
+                }
+            }
+        }
+        body.addView(privacyPanel.apply { topMargin(14) })
     }
 
     /** Primary action stays reachable even when the keypad body must scroll. */

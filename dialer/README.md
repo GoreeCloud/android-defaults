@@ -77,3 +77,9 @@ The broader product proposal includes call screening, on-device spam defenses, A
 ### Architecture
 
 `DialerActivity` displays navigation and operating-system data. `PhoneInCallService` is bound by Android Telecom. `CallSession` manages only in-process live calls and publishes UI updates. `CallActionReceiver` handles explicit app-internal notification actions only for their originating live call, rejecting stale actions. `PhoneMatcher` provides offline number/T9 matching. No server, identity account, Mesh synchronization, or Wardveil cloud feed is active.
+
+## First verified-scope Compose migration slice — work in progress
+
+The **read-only Settings → Privacy and safety panel** is being migrated to Compose inside the existing Android View screen. The app integrates a local source copy of the canonical [GoreeCloud UI Material 3 Expressive module](gc-ui-compose/UPSTREAM.md), using system light/dark appearance, the default Iris palette, rounded surfaces and reduced-motion fallback. This does **not** mean the Dialer's primary UI is already Jetpack Compose: keypad, contacts, recents, Phone role and Telecom call screens remain the legacy Android View implementation and must be migrated under [issue #84](https://github.com/GoreeCloud/android-defaults/issues/84).
+
+The activity now uses AndroidX `ComponentActivity` for the supported ComposeView lifecycle; Phone-role requests, contacts/call-log permissions, calling/DTMF, provider reads, save-state, local favorites, emergency-routing delegation and notification paths are **unchanged**. This is a preview, not a certified Phone replacement. AGP 9.2.0, Gradle 9.4.1, Android SDK 37.1 and Kotlin Compose plugin 2.2.10 are used to compile the canonical source; `minSdk=26` and `targetSdk=35` stay unchanged. CI must pass Kotlin, lint, APK permission and API 26/35/36 disposable emulator tests. Physical carrier and emergency-safety acceptance remain unverified.

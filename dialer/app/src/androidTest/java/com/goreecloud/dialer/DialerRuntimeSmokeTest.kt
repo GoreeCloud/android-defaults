@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import androidx.compose.ui.platform.ComposeView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -53,6 +54,9 @@ class DialerRuntimeSmokeTest {
                 assertTrue(textExists(root, "Call history is only read"))
                 button(root, "Settings").performClick()
                 assertTrue(textExists(root, "Phone app"))
+                // The first Compose migration stays on the read-only
+                // privacy panel; all sensitive Phone-role controls remain Views.
+                assertTrue(descendants(root).filterIsInstance<ComposeView>().any())
                 button(root, "Manage Android app permissions")
                 button(root, "Keypad").performClick()
                 assertTrue(textExists(root, "Call a number"))
