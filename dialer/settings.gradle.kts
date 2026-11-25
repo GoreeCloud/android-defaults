@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "GoreeCloudDialer"
-include(":app")
+include(":app", ":gc-ui-compose")

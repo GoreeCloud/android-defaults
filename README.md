@@ -21,3 +21,7 @@ Other products, including Clock, may be developed in separate pull requests; the
 The current GoreeCloud-authored source, tests and documentation on this default branch are available under the [MIT License](LICENSE), copyright (c) 2026 GoreeCloud, subject to applicable component rights. The legacy Contacts mirror retains its source history and attribution. The former standalone Contacts repository and its separate license are no longer accessible on GitHub; do not assume this root license automatically governs any separately recovered source.
 
 Unmerged development branches, including the proposed **GoreeCloud Clock**, are not automatically cleared for redistribution merely because this repository has a root MIT license. Review each module's ownership, contributions, third-party code and applicable notices before merging or distributing it. Android SDK/Gradle dependencies and external assets retain their independent terms. This license does not establish production/default-phone or emergency-calling acceptance.
+
+### Dialer Compose transition
+
+A reviewable, read-only privacy panel is being migrated to the canonical [GC UI Compose source](dialer/gc-ui-compose/UPSTREAM.md), while the safety-critical Phone-role and call-control UI remains Android Views. This is **partial** platform adoption, not yet primary-framework compliance or a qualified replacement dialer. Follow [Dialer issue #84](https://github.com/GoreeCloud/android-defaults/issues/84) for the complete migration and acceptance gates. No Contacts or Clock source changes accompany this slice.

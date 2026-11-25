@@ -28,7 +28,7 @@ permissions:
 jobs:
   dialer:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -36,10 +36,15 @@ jobs:
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.4.1'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+      - name: Install Android 37.1 compile platform
+        run: sdkmanager --install "platforms;android-37.1" "build-tools;36.0.0"
       - name: Verify all third-party GitHub Actions are commit-pinned
         run: |
           python3 - <<'PY'
@@ -55,6 +60,7 @@ jobs:
               "gradle/actions/setup-gradle": "8da46b539cd8fe6ab27ca75128919a18d757604c",
               "actions/upload-artifact": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
               "ReactiveCircus/android-emulator-runner": "a421e43855164a8197daf9d8d40fe71c6996bb0d",
+              "android-actions/setup-android": "be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd",
           }
           expected = Counter({
               "actions/checkout": 2,
@@ -62,6 +68,7 @@ jobs:
               "gradle/actions/setup-gradle": 2,
               "actions/upload-artifact": 2,
               "ReactiveCircus/android-emulator-runner": 1,
+              "android-actions/setup-android": 2,
           })
           actual = Counter()
           for value in uses:
@@ -116,7 +123,7 @@ jobs:
           python3 -m unittest discover -s dialer/ci/tests -p 'test_*.py' -v
       - name: Kotlin tests, APK build, Android lint
         working-directory: dialer
-        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon --stacktrace
+        run: gradle :gc-ui-compose:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon --stacktrace
       - name: Verify packaged APK identity and permissions
         run: |
           set -euo pipefail
@@ -143,7 +150,7 @@ jobs:
   emulator-smoke:
     needs: dialer
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -155,10 +162,15 @@ jobs:
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.4.1'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+      - name: Install Android 37.1 compile platform
+        run: sdkmanager --install "platforms;android-37.1" "build-tools;36.0.0"
       - name: Check emulator screenshot script syntax
         run: bash -n dialer/ci/capture-emulator.sh
       - name: Enable KVM on disposable CI runner
